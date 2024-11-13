@@ -1,0 +1,12 @@
+[package]
+name = "testbed"
+version = "0.1.0"
+edition = "2021"
+resolver="2"
+
+[dependencies]
+chibi_engine = { path="../../engine" }
+
+[[bin]]
+name = "testbed"
+path = "src/main.rs"
