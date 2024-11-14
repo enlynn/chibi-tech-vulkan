@@ -2,6 +2,7 @@
 use std::cell::RefCell;
 
 use crate::window;
+use crate::renderer;
 
 pub trait Game {
     fn on_init(&mut self)     -> bool;
@@ -21,13 +22,25 @@ impl Game for DefaultGame {
 pub struct Engine {
     game:          RefCell<Box<dyn Game>>,
     window_system: window::WindowSystem,
+    client_window: window::Window,
+    render_system: renderer::RenderSystem,
 }
 
 impl Engine {
     pub fn new() -> Engine {
+        let game = RefCell::new(Box::new(DefaultGame{}));
+        let window_system = window::WindowSystem::new();
+        // todo: set window title/width/height based on user game data.
+        let client_window = window_system.create_window("Chibi Vulkan", 1920, 1080);
+        let render_system = renderer::RenderSystem::new(renderer::RendererCreateInfo{
+            surface: client_window.get_native_surface(),
+        });
+
         return Engine{
-            game:          RefCell::new(Box::new(DefaultGame{})),
-            window_system: window::WindowSystem::new(),
+            game,
+            window_system,
+            client_window,
+            render_system,
         }
     }
 
@@ -39,7 +52,7 @@ impl Engine {
         let mut game = self.game.borrow_mut();
 
         // run post-game setup
-        let client_window = self.window_system.create_window("Chibi Vulkan", 1920, 1080);
+
 
         // initialize the game
         let mut game_res = game.on_init();
@@ -52,7 +65,7 @@ impl Engine {
                 break;
             }
 
-            if client_window.should_window_close() {
+            if self.client_window.should_window_close() {
                 break;
             }
 

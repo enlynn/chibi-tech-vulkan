@@ -37,24 +37,24 @@ impl WindowSystem {
 #[derive(Clone, Copy)]
 pub struct X11Surface
 {
-    pub(crate) window:  raw::c_ulong,
-    pub(crate) display: *mut raw::c_void,
+    pub(crate) window:     raw::c_ulong,
+    pub(crate) display:    *mut raw::c_void,
 }
 
 #[cfg(target_os = "linux")]
 #[derive(Clone, Copy)]
 pub struct WaylandSurface
 {
-    pub(crate) surface: *mut raw::c_void,
-    pub(crate) display: *mut raw::c_void,
+    pub(crate) surface:    *mut raw::c_void,
+    pub(crate) display:    *mut raw::c_void,
 }
 
 #[cfg(target_os = "windows")]
 #[derive(Clone, Copy)]
 pub struct Win32Surface
 {
-    pub(crate) surface: *mut raw::c_void,
-    pub(crate) display: *mut raw::c_void,
+    pub(crate) surface:    *mut raw::c_void,
+    pub(crate) display:    *mut raw::c_void,
 }
 
 #[derive(Clone, Copy)]
@@ -79,5 +79,9 @@ pub struct Window {
 impl Window {
     pub fn should_window_close(&self) -> bool {
         return self.inner.should_window_close();
+    }
+
+    pub fn get_native_surface(&self) -> NativeSurface {
+        return self.inner.get_native_surface();
     }
 }
