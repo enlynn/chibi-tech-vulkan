@@ -150,6 +150,7 @@ fn generate_glfw_bindings() {
     println!("cargo:rustc-link-search={}", libdir_path_str);
 
     // Tell cargo to tell rustc to link the shared libraries.
+    // todo: the compiler is not picking up my compiled glfw. i'll figure that out later.
     println!("cargo:rustc-link-lib=glfw");
 
     // The bindgen::Builder is the main entry point
@@ -172,98 +173,7 @@ fn generate_glfw_bindings() {
         .expect("Couldn't write glfw bindings!");
 }
 
-// fn generate_vulkan_bindings() {
-//     // Path to the Vulkan Wrapper that includes the vulkan memory allocator
-//     let libdir_path = PathBuf::from("vendor/vulkan")
-//         // Canonicalize the path as `rustc-link-search` requires an absolute path.
-//         .canonicalize()
-//         .expect("cannot canonicalize path");
-
-//     // This is the path to the `c` headers file.
-//     let headers_path = libdir_path.join("vulkan_wrapper.h");
-//     let headers_path_str = headers_path.to_str().expect("Path is not a valid string");
-
-//     // This is the path to the intermediate object file for our library.
-//     let obj_path = libdir_path.join("vulkan_wrapper.o");
-//     // This is the path to the static library file.
-//     let lib_path = libdir_path.join("libvulkan_wrapper.a");
-
-//     let include_path = libdir_path.join("1.3.296");
-//     let include_arg = format!("-I{}", include_path.to_str().unwrap());
-
-//     // Tell cargo to look for shared libraries in the specified directory
-//     println!("cargo:rustc-link-search={}", libdir_path.to_str().unwrap());
-
-//     // Tell cargo to tell rustc to link the vulkan wrapper
-//     println!("cargo:rustc-link-lib=vulkan_wrapper");
-
-//     println!("{}", libdir_path.display());
-//     println!("{}", include_arg);
-
-//     // TODO: how will this fare on windows?
-//     // Run `clang` to compile the library
-//     // Unwrap if it is not possible to spawn the process.
-//     if !std::process::Command::new("clang++")
-//         .arg(&include_arg)
-//         .arg("-c")
-//         .arg("-o")
-//         .arg(&obj_path)
-//         .arg(libdir_path.join("vulkan_wrapper.c"))
-//         .output()
-//         .expect("could not spawn `clang`")
-//         .status
-//         .success()
-//     {
-//         // Panic if the command was not successful.
-//         panic!("could not compile vulkan wrapper object file");
-//     }
-
-//     // TODO: how will this fare on windows?
-//     // Run `ar` to generate the `libvulkan_wrapper.a` file from the `vulkan_wrapper.o` file.
-//     // Unwrap if it is not possible to spawn the process.
-//     if !std::process::Command::new("ar")
-//         .arg("rcs")
-//         .arg(lib_path)
-//         .arg(obj_path)
-//         .output()
-//         .expect("could not spawn `ar`")
-//         .status
-//         .success()
-//     {
-//         // Panic if the command was not successful.
-//         panic!("could not emit vulkan wrapper library file");
-//     }
-
-//     // The bindgen::Builder is the main entry point
-//     // to bindgen, and lets you build up options for
-//     // the resulting bindings.
-//     let bindings = bindgen::Builder::default()
-//         .clang_arg(&include_arg)
-//         // The input header we would like to generate
-//         // bindings for.
-//         .header(headers_path_str)
-//         // disable test layouts
-//         .layout_tests(false)
-
-//         // Tell cargo to invalidate the built crate whenever any of the
-//         // included header files changed.
-//         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-//         // Finish the builder and generate the bindings.
-//         .generate()
-//         // Unwrap the Result and panic on failure.
-//         .expect("Unable to generate vulkan bindings");
-
-//     // Write the bindings to the $OUT_DIR/bindings.rs file.
-//     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("vulkan_bindings.rs");
-//     bindings
-//         .write_to_file(out_path)
-//         .expect("Couldn't write vulkan bindings!");
-// }
-
 fn main() {
     gen_vulkan_bindings();
-
     generate_glfw_bindings();
-    //generate_vulkan_bindings();
-
 }

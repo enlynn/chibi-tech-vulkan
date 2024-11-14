@@ -1,6 +1,8 @@
 
 use std::cell::RefCell;
 
+use crate::window;
+
 pub trait Game {
     fn on_init(&mut self)     -> bool;
     fn on_update(&mut self)   -> bool;
@@ -17,13 +19,15 @@ impl Game for DefaultGame {
 }
 
 pub struct Engine {
-    game: RefCell<Box<dyn Game>>, //TODO: not sure how I feel about using an option here.
+    game:          RefCell<Box<dyn Game>>,
+    window_system: window::WindowSystem,
 }
 
 impl Engine {
     pub fn new() -> Engine {
         return Engine{
-            game: RefCell::new(Box::new(DefaultGame{})),
+            game:          RefCell::new(Box::new(DefaultGame{})),
+            window_system: window::WindowSystem::new(),
         }
     }
 
@@ -35,6 +39,7 @@ impl Engine {
         let mut game = self.game.borrow_mut();
 
         // run post-game setup
+        let client_window = self.window_system.create_window("Chibi Vulkan", 1920, 1080);
 
         // initialize the game
         let mut game_res = game.on_init();
@@ -43,6 +48,14 @@ impl Engine {
         }
 
         loop {
+            if !self.window_system.pump_window_message() {
+                break;
+            }
+
+            if client_window.should_window_close() {
+                break;
+            }
+
             game_res = game.on_update();
             if !game_res {
                 break;

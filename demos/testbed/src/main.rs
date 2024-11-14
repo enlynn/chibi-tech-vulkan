@@ -5,10 +5,10 @@ use chibi_engine::core::engine;
 struct Testbed{}
 
 impl engine::Game for Testbed {
-    fn on_init(&mut self)     -> bool { println!("on_init");     return true; }
-    fn on_update(&mut self)   -> bool { println!("on_update");   return true; }
-    fn on_render(&mut self)   -> bool { println!("on_render");   return true; }
-    fn on_shutdown(&mut self) -> bool { println!("on_shutdown"); return true; }
+    fn on_init(&mut self)     -> bool { return true; }
+    fn on_update(&mut self)   -> bool { return true; }
+    fn on_render(&mut self)   -> bool { return true; }
+    fn on_shutdown(&mut self) -> bool { return true; }
 }
 
 fn main() {
