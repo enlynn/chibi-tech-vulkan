@@ -1,7 +1,14 @@
+// temporary
+#![allow(unused)]
+
+#![feature(concat_idents)]
+
 mod window;
 mod renderer;
 
 pub mod core;
+
+mod util;
 
 use std::rc::Rc;
 

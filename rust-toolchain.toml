@@ -1,0 +1,5 @@
+[toolchain]
+channel = "nightly"
+# Nightly currently required for:
+# - concat_idents
+# - maybe simd?

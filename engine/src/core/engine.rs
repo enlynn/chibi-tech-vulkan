@@ -51,7 +51,7 @@ impl Engine {
     pub fn run(&self) {
         let mut game = self.game.borrow_mut();
 
-        // run post-game setup
+        // run post-game engine setup
 
 
         // initialize the game
