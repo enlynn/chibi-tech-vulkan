@@ -155,7 +155,6 @@ fn generate_glfw_bindings() {
 
     // only rebuild bindings if the wrapper file has upded
     println!("cargo:rerun-if-changed={}", "vendor/glfw/glfw_wrapper.h");
-    println!("cargo:rerun-if-changed={}", "vendor/glfw/glfw_wrapper_native.h");
 
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
@@ -175,17 +174,6 @@ fn generate_glfw_bindings() {
     bindings
         .write_to_file(out_path.join("glfw_bindings.rs"))
         .expect("Couldn't write glfw bindings!");
-
-    // generate bindings for the native api (it conflicts with the normal glfw api)
-    // let native_bindings = bindgen::Builder::default()
-    //     .header("vendor/glfw/glfw_wrapper_native.h")
-    //     .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-    //     .generate()
-    //     .expect("Unable to generate glfw native bindings");
-
-    // native_bindings
-    //     .write_to_file(out_path.join("glfw_native_bindings.rs"))
-    //     .expect("Couldn't write native glfw bindings!");
 }
 
 fn main() {
