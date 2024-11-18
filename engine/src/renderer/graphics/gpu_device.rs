@@ -1,21 +1,34 @@
 
 use crate::window::NativeSurface;
+use crate::util::ffi::*;
 
 use super::api;
 use super::consts;
 use super::gpu_utils as util;
 
+use std::borrow::Borrow;
+use std::ffi::{CString, CStr};
+use std::mem::MaybeUninit;
+
 pub struct Features {}
 
 pub struct CreateInfo {
-    pub features: Features,
-    pub surface: NativeSurface,
+    pub features:         Features,
+    pub surface:          NativeSurface,
+    pub software_version: u32,
+    pub software_name:    String,
 }
 
 pub struct Instance {
-    glb_fns:  util::GlobalFnTable,
-    inst_fns: util::InstanceFnTable,
-    handle:   api::VkInstance,
+    // Vulkan-Loaded functions
+    glb_fns:              util::GlobalFnTable,
+    inst_fns:             util::InstanceFnTable,
+    handle:               api::VkInstance,
+    // meta information about the VkInstance
+    requested_layers:     Vec<CString>,
+    requested_extensions: Vec<CString>,
+    software_name:        CString,
+    engine_name:          CString,
 }
 
 pub struct Gpu {
@@ -28,7 +41,7 @@ pub struct Display {
 }
 
 pub struct Surface {
-
+    handle: api::VkSurfaceKHR,
 }
 
 pub struct SwapchainImage {
@@ -40,11 +53,10 @@ pub struct Swapchain {
 }
 
 pub struct Device {
-    global_fns: util::GlobalFnTable,
-
     //fns: util::DeviceFnTable
 
-    //surface:   Surface,
+    instance:  Instance,
+    surface:   Surface,
     //swapchain: Swapchain,
 
     //gpus:     Vec<Rc<Gpu>>,
@@ -54,15 +66,346 @@ pub struct Device {
     //display: Rc<Display>,
 }
 
-impl Device {
-    pub fn new(_create_info: CreateInfo) -> Device {
+unsafe extern "C" fn debug_callback(
+    severity:      api::VkDebugUtilsMessageSeverityFlagBitsEXT,
+    _message_type: api::VkDebugUtilsMessageTypeFlagsEXT,
+    data:         *const api::VkDebugUtilsMessengerCallbackDataEXT,
+    _:            *mut std::os::raw::c_void,
+) -> api::VkBool32
+{
+    if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0 {
+        println!("[VERBOSE]: {:?}", CStr::from_ptr((*data).pMessage));
+    }
+    else if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0
+    {
+        println!("[INFO]: {:?}", CStr::from_ptr((*data).pMessage));
+    }
+    else if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0
+    {
+        println!("[WARNING]: {:?}", CStr::from_ptr((*data).pMessage));
+    }
+    else if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0
+    {
+        println!("[ERROR]: {:?}", CStr::from_ptr((*data).pMessage));
+    }
+
+    api::VK_FALSE
+}
+
+impl Instance {
+    pub fn new(software_version: u32, software_name: &str) -> Result<Instance, String> {
+        // load vulkan functions
+        //
         let global_fns: util::GlobalFnTable = match util::load_vulkan_proc_addr() {
             Ok(fns) => fns,
             Err(reason) => panic!("Failed to load vulkan library: {}", reason),
         };
 
-        return Device{
-            global_fns
+        // Build list of validation layers, if enabled and available
+        //
+        let desired_validation_layer = byte_array_as_cstr!(consts::VK_LAYER_KHRONOS_VALIDATION_LAYER_NAME);
+
+        let mut instance_layer_strings = Vec::<CString>::new();
+        let mut instance_layers        = Vec::<*const std::os::raw::c_char>::new();
+
+        if consts::ENABLE_DEBUG_LAYER {
+            let validation_layers = global_fns.enumerate_instance_layers();
+
+            for layer in validation_layers.iter() {
+                if char_array_as_cstr!(layer.layerName) == desired_validation_layer {
+                    let string: CString = desired_validation_layer.into();
+                    instance_layers.push(string.as_ptr());
+                    instance_layer_strings.push(string);
+
+                    break;
+                }
+            }
+
+            if instance_layer_strings.len() == 0 {
+                println!("[WARN] :: Instance::new :: Requested validation layers, but they were not found.");
+            }
+        }
+
+        // Populate the debug messenger info, we'll load the function once VkInstance has been created.
+        //
+
+        let severities =
+            api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+
+        let message_types =
+            api::VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT     |
+            api::VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
+            api::VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+
+        let mut debug_messenger_ci = api::VkDebugUtilsMessengerCreateInfoEXT::default();
+        debug_messenger_ci.messageSeverity = severities;
+        debug_messenger_ci.messageType     = message_types;
+        debug_messenger_ci.pfnUserCallback = Some(debug_callback);
+
+        let p_next: *const std::os::raw::c_void = if consts::ENABLE_DEBUG_LAYER {
+            &debug_messenger_ci as *const _ as *const std::os::raw::c_void
+        } else {
+            std::ptr::null()
         };
+
+        // Build list of instance extensions
+        //
+
+        let mut instance_ext_strings = Vec::<CString>::new();
+        let mut instance_exts        = Vec::<*const std::os::raw::c_char>::new();
+
+        let available_extensions = global_fns.enumerate_instance_extensions();
+
+        // We want 2 specific platform extensions:
+        // 1. Surface KHR extension
+        // 2. Platform Surface KHR extension
+        let mut surface_ext_found          = false;
+        let mut platform_surface_ext_found = false;
+
+        // TODO(enlynn): other operating systems
+        let platform_surface_ext = if cfg!(target_os = "linux") {
+            if let Ok(session_type) = std::env::var("XDG_SESSION_TYPE") {
+                match session_type.as_str() {
+                    "x11"     => byte_array_as_cstr!(api::VK_KHR_XLIB_SURFACE_EXTENSION_NAME),
+                    "wayland" => byte_array_as_cstr!(api::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME),
+                    _         => return Err("Unsupported window manager".to_string()),
+                }
+            } else {
+                return Err("Unsupported window manager".to_string());
+            }
+        } else {
+            return Err("Unsupported operating system".to_string());
+        };
+
+        // Verify the extensions are available
+        for extension in available_extensions.iter() {
+            let ext_c_str = char_array_as_cstr!(extension.extensionName);
+
+            if ext_c_str == byte_array_as_cstr!(api::VK_KHR_SURFACE_EXTENSION_NAME) {
+                let string: CString = ext_c_str.into();
+
+                instance_exts.push(string.as_ptr());
+                instance_ext_strings.push(string);
+
+                surface_ext_found = true;
+            } else if ext_c_str == platform_surface_ext {
+                let string: CString = ext_c_str.into();
+
+                instance_exts.push(string.as_ptr());
+                instance_ext_strings.push(string);
+
+                platform_surface_ext_found = true;
+            } else if consts::ENABLE_DEBUG_LAYER {
+                if ext_c_str == byte_array_as_cstr!(api::VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
+                    let string: CString = ext_c_str.into();
+
+                    instance_exts.push(string.as_ptr());
+                    instance_ext_strings.push(string);
+                }
+            }
+        }
+
+        // These extensions are required for rendering to the Swapchain, so failing to find them is a fatal error.
+        if !surface_ext_found {
+            return Err("Surface extension for Vulkan not found".to_string());
+        }
+
+        if !platform_surface_ext_found {
+            return Err("Platform surface extension for Vulkan not found".to_string());
+        }
+
+        // Create the VkInstance
+        //
+        let software_name = CString::new(software_name).unwrap();
+        let engine_name   = CString::new("ChibiTech").unwrap();
+
+        let mut app_info = api::VkApplicationInfo::default();
+        app_info.pEngineName        = engine_name.as_ptr();
+        app_info.engineVersion      = crate::ENGINE_VERSION;
+        app_info.pApplicationName   = software_name.as_ptr();
+        app_info.applicationVersion = software_version;
+        //api version is 1.3 by default
+
+        let mut instance_ci = api::VkInstanceCreateInfo::default();
+        instance_ci.pNext                   = p_next;
+        instance_ci.pApplicationInfo        = &app_info as *const _;
+        instance_ci.enabledLayerCount       = instance_layers.len() as u32;
+        instance_ci.ppEnabledLayerNames     = instance_layers.as_ptr();
+        instance_ci.enabledExtensionCount   = instance_exts.len() as u32;
+        instance_ci.ppEnabledExtensionNames = instance_exts.as_ptr();
+
+        let mut instance: api::VkInstance = std::ptr::null_mut();
+        util::call_throw!(global_fns.create_instance, &instance_ci as *const _, std::ptr::null(), &mut instance as *mut _);
+
+        // Load Instance-level Functions
+        //
+        let instance_fns: util::InstanceFnTable = match util::load_instance_functions(&global_fns, instance) {
+            Ok(fns) => fns,
+            Err(reason) => panic!("Failed to load vulkan library: {}", reason),
+        };
+
+        // Create the debug messenger
+        //
+
+        let debug_messenger = if consts::ENABLE_DEBUG_LAYER {
+            let mut ptr: api::VkDebugUtilsMessengerEXT = std::ptr::null_mut();
+
+            let mut result: i32 = api::VK_SUCCESS;
+            if let Some(create_debug_messenger) = instance_fns.create_debug_messenger {
+                result = call!(
+                    create_debug_messenger,
+                    instance,
+                    &debug_messenger_ci as *const _,
+                    std::ptr::null_mut(),
+                    &mut ptr as *mut _
+                );
+            }
+            else {
+                println!("[WARN] :: Instance::new :: Requested debug messenger, but failed to load the function.");
+            }
+
+            if result < 0 || ptr.is_null() {
+                None
+            } else {
+                Some(ptr)
+            }
+        } else {
+            None
+        };
+
+        Ok(Instance{
+            glb_fns:              global_fns,
+            inst_fns:             instance_fns,
+            handle:               instance,
+            requested_layers:     instance_layer_strings,
+            requested_extensions: instance_ext_strings,
+            software_name,
+            engine_name,
+        })
+    }
+}
+
+impl Surface {
+    pub fn new(instance: &Instance, native_surface: NativeSurface) -> Result<Surface, String> {
+        let result = if cfg!(target_os = "linux") {
+            if let NativeSurface::Wayland(native) = native_surface {
+                let info = api::VkWaylandSurfaceCreateInfoKHR {
+                    sType:   api::VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+                    pNext:   std::ptr::null(),
+                    flags:   0,
+                    display: native.display as *mut api::wl_display,
+                    surface: native.surface as *mut api::wl_surface,
+                };
+
+                let mut surf = MaybeUninit::<api::VkSurfaceKHR>::uninit();
+                util::call_throw!(
+                    instance.inst_fns.create_wayland_surface.unwrap(),
+                    instance.handle,
+                    &info as *const _,
+                    std::ptr::null(),
+                    surf.as_mut_ptr()
+                );
+                Ok(Surface {
+                    handle: unsafe { surf.assume_init() },
+                })
+            } else if let NativeSurface::X11(native) = native_surface {
+                let info = api::VkXlibSurfaceCreateInfoKHR {
+                    sType: api::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+                    pNext: std::ptr::null(),
+                    flags: 0,
+                    dpy:    native.display as *mut api::Display,
+                    window: native.window as api::Window,
+                };
+
+                let mut surf = MaybeUninit::<api::VkSurfaceKHR>::uninit();
+                util::call_throw!(
+                    instance.inst_fns.create_xlib_surface.unwrap(),
+                    instance.handle,
+                    &info as *const _,
+                    std::ptr::null(),
+                    surf.as_mut_ptr()
+                );
+                Ok(Surface {
+                    handle: unsafe { surf.assume_init() },
+                })
+            }
+            else {
+                panic!("Invalid native surface for linux.");
+            }
+        } else {
+            Err("unsupported operating system".to_string())
+        };
+
+        result
+    }
+}
+
+impl Device {
+    pub fn new(create_info: CreateInfo) -> Device {
+        let instance = match Instance::new(create_info.software_version, create_info.software_name.as_str()) {
+            Ok(inst)     => inst,
+            Err(reason)  => panic!("Failed to create vulkan instance: {}", reason),
+        };
+
+        let surface = match Surface::new(&instance, create_info.surface) {
+            Ok(surf)     => surf,
+            Err(reason)  => panic!("Failed to create vulkan surface: {}", reason),
+        };
+
+        return Device{
+            instance,
+            surface,
+        };
+    }
+
+    fn does_gpu_meet_requirements(gpu: api::VkPhysicalDevice) -> bool {
+        false
+    }
+
+    fn enumerate_gpus(instance: &Instance) -> Vec<Gpu> {
+        let mut result = Vec::<Gpu>::new();
+
+        let vk_gpus = instance.inst_fns.enumerate_gpus(instance.handle);
+        for gpu in vk_gpus.into_iter() {
+            let mut properties_unsafe = MaybeUninit::<api::VkPhysicalDeviceProperties>::uninit();
+            call!(instance.inst_fns.get_gpu_properties, gpu, properties_unsafe.as_mut_ptr());
+
+            let mut features_unsafe = MaybeUninit::<api::VkPhysicalDeviceFeatures>::uninit();
+            call!(instance.inst_fns.get_gpu_features, gpu, features_unsafe.as_mut_ptr());
+
+            let mut memory_unsafe = MaybeUninit::<api::VkPhysicalDeviceMemoryProperties>::uninit();
+            call!(instance.inst_fns.get_gpu_memory_properties, gpu, memory_unsafe.as_mut_ptr());
+
+            // let's unwrap the types
+            let properties = unsafe { properties_unsafe.assume_init() };
+            let features   = unsafe { features_unsafe.assume_init()   };
+            let memory     = unsafe { memory_unsafe.assume_init()     };
+
+            // Check if device supports local/host visible combo
+            let mut supports_device_local_host_visible = false;
+            for i in 0..memory.memoryTypeCount {
+                let has_host_visible = (memory.memoryTypes[i as usize].propertyFlags & api::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+                let has_device_local = (memory.memoryTypes[i as usize].propertyFlags & api::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
+                if has_host_visible && has_device_local {
+                    supports_device_local_host_visible = true;
+                    break;
+                }
+            }
+
+            if !Device::does_gpu_meet_requirements(gpu) {
+                continue;
+            }
+
+            // todo: swapchain support
+
+            // todo: get queue families
+
+            // todo: get supported surface formats
+
+            // todo: create gpu
+        }
+
+        result
     }
 }

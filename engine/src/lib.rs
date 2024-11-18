@@ -2,6 +2,7 @@
 #![allow(unused)]
 
 #![feature(concat_idents)]
+#![feature(stmt_expr_attributes)]
 
 mod window;
 mod renderer;
@@ -53,10 +54,15 @@ A few thoughts on Lifetimes:
 
 */
 
-pub fn hello_engine() {
-    println!("Hello, engine!");
-}
+pub const ENGINE_VERSION_MAJOR: u32 = 0;
+pub const ENGINE_VERSION_MINOR: u32 = 0;
+pub const ENGINE_VERSION_PATCH: u32 = 1;
+pub const ENGINE_VERSION: u32 = ENGINE_VERSION_MAJOR << 24 | ENGINE_VERSION_MINOR << 16 | ENGINE_VERSION_PATCH << 8;
 
 pub fn new_engine() -> Rc<core::engine::Engine>{
     return Rc::new(core::engine::Engine::new());
+}
+
+pub fn make_app_version(major: u32, minor: u32, patch: u32) -> u32 {
+    return major << 24 | minor << 16 | patch << 8;
 }

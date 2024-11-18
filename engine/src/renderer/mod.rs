@@ -36,8 +36,10 @@ impl RenderSystem {
     pub fn new(create_info: RendererCreateInfo) -> RenderSystem {
         return RenderSystem{
             device: gpu_device::Device::new(gpu_device::CreateInfo{
-                features: gpu_device::Features{},
-                surface: create_info.surface,
+                features:         gpu_device::Features{},
+                surface:          create_info.surface,
+                software_version: crate::make_app_version(0, 0, 1), //todo: make configurable
+                software_name:    String::from("Testbed"),          //todo: make configurable
             })
         };
     }

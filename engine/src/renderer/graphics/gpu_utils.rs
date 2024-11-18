@@ -18,6 +18,8 @@ macro_rules! call_throw {
     }};
 }
 
+ pub(crate) use call_throw;
+
 macro_rules! get_vk_procaddr_optional {
     ($call:expr, $obj:expr, $func:ident) => {{
         let pfn = unsafe { ($call)($obj, cstr_stringify!($func)) };
@@ -56,41 +58,72 @@ macro_rules! redef {
 pub struct GlobalFnTable {
     dll: os::DllLibrary,
 
+    pub create_instance:                     FN_vkCreateInstance,
     get_inst_procaddr:                       FN_vkGetInstanceProcAddr,
-    create_instance:                         FN_vkCreateInstance,
     enumerate_instance_extension_properties: FN_vkEnumerateInstanceExtensionProperties,
     enumerate_instance_layer_properties:     FN_vkEnumerateInstanceLayerProperties,
 }
 
 impl GlobalFnTable {
-    pub fn enumerate_instance_extensions(&self) -> Vec<String> {
-        todo!()
+    pub fn enumerate_instance_extensions(&self) -> Vec<VkExtensionProperties> {
+        let mut extension_count: u32 = 0;
+        call_throw!(self.enumerate_instance_extension_properties, ptr::null(), &mut extension_count as *mut u32, ptr::null_mut());
+
+        if extension_count > 0 {
+            let mut extensions = Vec::<VkExtensionProperties>::with_capacity(extension_count as usize);
+            extensions.resize(extension_count as usize, VkExtensionProperties::default());
+
+            call_throw!(self.enumerate_instance_extension_properties, ptr::null(), &mut extension_count as *mut u32, extensions.as_mut_ptr());
+            return extensions;
+        }
+        else
+        {
+            return Vec::<VkExtensionProperties>::with_capacity(0);
+        }
     }
 
-    pub fn enumerate_instance_layers(&self) -> Vec<String> {
-        todo!()
+    pub fn enumerate_instance_layers(&self) -> Vec<VkLayerProperties> {
+        let mut layer_count: u32 = 0;
+        call_throw!(self.enumerate_instance_layer_properties, &mut layer_count as *mut u32, ptr::null_mut());
+
+        if layer_count > 0 {
+            let mut layers = Vec::<VkLayerProperties>::with_capacity(layer_count as usize);
+            layers.resize(layer_count as usize, VkLayerProperties::default());
+
+            call_throw!(self.enumerate_instance_layer_properties, &mut layer_count as *mut u32, layers.as_mut_ptr());
+            return layers;
+        }
+        else
+        {
+            return Vec::<VkLayerProperties>::with_capacity(0);
+        }
     }
 }
 
 pub struct InstanceFnTable
 {
-    create_device:              FN_vkCreateDevice,
-    destroy_debug_messenger:    PFN_vkDestroyDebugUtilsMessengerEXT,
-    destroy_instance:           FN_vkDestroyInstance,
-    destroy_surface:            FN_vkDestroySurfaceKHR,
-    enum_device_ext_props:      FN_vkEnumerateDeviceExtensionProperties,
-    enum_physical_devices:      FN_vkEnumeratePhysicalDevices,
-    get_phy_mem_props:          FN_vkGetPhysicalDeviceMemoryProperties,
-    get_phy_props:              FN_vkGetPhysicalDeviceProperties,
-    get_phy_queue_family_props: FN_vkGetPhysicalDeviceQueueFamilyProperties,
-    get_phy_surface_caps:       FN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
-    get_phy_surface_support:    FN_vkGetPhysicalDeviceSurfaceSupportKHR,
+    pub(crate) create_device:              FN_vkCreateDevice,
+    pub(crate) destroy_instance:           FN_vkDestroyInstance,
+    pub(crate) destroy_surface:            FN_vkDestroySurfaceKHR,
+    pub(crate) enum_device_ext_props:      FN_vkEnumerateDeviceExtensionProperties,
+    enum_physical_devices:                 FN_vkEnumeratePhysicalDevices,
+
+    pub(crate) get_gpu_memory_properties:  FN_vkGetPhysicalDeviceMemoryProperties,
+    pub(crate) get_gpu_properties:         FN_vkGetPhysicalDeviceProperties,
+    pub(crate) get_gpu_features:           FN_vkGetPhysicalDeviceFeatures,
+
+    pub(crate) get_phy_queue_family_props: FN_vkGetPhysicalDeviceQueueFamilyProperties,
+    pub(crate) get_phy_surface_caps:       FN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
+    pub(crate) get_phy_surface_support:    FN_vkGetPhysicalDeviceSurfaceSupportKHR,
     #[cfg(target_os = "linux")]
-    create_wayland_surface:     PFN_vkCreateWaylandSurfaceKHR,
+    pub(crate) create_wayland_surface:     PFN_vkCreateWaylandSurfaceKHR,
     #[cfg(target_os = "linux")]
-    create_xlib_surface:        PFN_vkCreateXlibSurfaceKHR,
+    pub(crate) create_xlib_surface:        PFN_vkCreateXlibSurfaceKHR,
     #[cfg(target_os = "windows")]
-    create_win32_surface:       PFN_vkCreateWin32SurfaceKHR,
+    pub(crate) create_win32_surface:       PFN_vkCreateWin32SurfaceKHR,
+
+    pub(crate) create_debug_messenger:  PFN_vkCreateDebugUtilsMessengerEXT,         // note(enlynn): don't need to *always* load this function
+    pub(crate) destroy_debug_messenger: PFN_vkDestroyDebugUtilsMessengerEXT,
 }
 
 impl InstanceFnTable {
@@ -98,8 +131,20 @@ impl InstanceFnTable {
         todo!()
     }
 
-    pub fn enumerate_gpus(&self) {
-        todo!()
+    pub fn enumerate_gpus(&self, instance: VkInstance) -> Vec<VkPhysicalDevice> {
+        let mut device_count: u32 = 0;
+        call_throw!(self.enum_physical_devices, instance, &mut device_count as *mut u32, ptr::null_mut());
+
+        if device_count > 0 {
+            let mut gpus = Vec::<VkPhysicalDevice>::with_capacity(device_count as usize);
+            gpus.resize(device_count as usize, std::ptr::null_mut());
+
+            call_throw!(self.enum_physical_devices, instance, &mut device_count as *mut u32, gpus.as_mut_ptr());
+
+            return gpus;
+        } else {
+            return Vec::with_capacity(0);
+        }
     }
 }
 
@@ -160,7 +205,7 @@ pub struct DeviceFnTable
 }
 
 /* ======================================================================== */
-/* Vulkan Helper Functions                                                  */
+/* Vulkan Helper get_gpu_featuresFunctions                                  */
 
 pub fn load_vulkan_proc_addr() -> Result<GlobalFnTable, String> {
     let lib: os::DllLibrary = if cfg!(unix) {
@@ -217,7 +262,13 @@ pub fn load_instance_functions(gbl: &GlobalFnTable, inst: VkInstance) -> Result<
         };
     }
 
-    let destroy_debug_messenger = if consts::ENABLE_DEBUG_MESSENGER {
+    let create_debug_messenger = if consts::ENABLE_DEBUG_LAYER {
+        Some(get_inst_procaddr!(inst, vkCreateDebugUtilsMessengerEXT))
+    } else {
+        None
+    };
+
+    let destroy_debug_messenger = if consts::ENABLE_DEBUG_LAYER {
         Some(get_inst_procaddr!(inst, vkDestroyDebugUtilsMessengerEXT))
     } else {
         None
@@ -225,13 +276,13 @@ pub fn load_instance_functions(gbl: &GlobalFnTable, inst: VkInstance) -> Result<
 
     let funcs = InstanceFnTable {
         create_device:              get_inst_procaddr!(inst, vkCreateDevice),
-        destroy_debug_messenger:    destroy_debug_messenger,
         destroy_instance:           get_inst_procaddr!(inst, vkDestroyInstance),
         destroy_surface:            get_inst_procaddr!(inst, vkDestroySurfaceKHR),
         enum_device_ext_props:      get_inst_procaddr!(inst, vkEnumerateDeviceExtensionProperties),
         enum_physical_devices:      get_inst_procaddr!(inst, vkEnumeratePhysicalDevices),
-        get_phy_mem_props:          get_inst_procaddr!(inst, vkGetPhysicalDeviceMemoryProperties),
-        get_phy_props:              get_inst_procaddr!(inst, vkGetPhysicalDeviceProperties),
+        get_gpu_memory_properties:  get_inst_procaddr!(inst, vkGetPhysicalDeviceMemoryProperties),
+        get_gpu_properties:         get_inst_procaddr!(inst, vkGetPhysicalDeviceProperties),
+        get_gpu_features:           get_inst_procaddr!(inst, vkGetPhysicalDeviceFeatures),
         get_phy_queue_family_props: get_inst_procaddr!(inst, vkGetPhysicalDeviceQueueFamilyProperties),
         get_phy_surface_caps:       get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceCapabilitiesKHR),
         get_phy_surface_support:    get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceSupportKHR),
@@ -241,6 +292,8 @@ pub fn load_instance_functions(gbl: &GlobalFnTable, inst: VkInstance) -> Result<
         create_xlib_surface:        get_inst_procaddr_optional!(inst, vkCreateXlibSurfaceKHR),
         #[cfg(target_os = "windows")]
         create_win32_surface:       get_inst_procaddr_optional!(inst, vkCreateWin32SurfaceKHR),
+        create_debug_messenger,
+        destroy_debug_messenger,
     };
 
     Ok(funcs)
