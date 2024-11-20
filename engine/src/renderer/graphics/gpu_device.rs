@@ -9,6 +9,8 @@ use super::gpu_utils as util;
 use std::borrow::Borrow;
 use std::ffi::{CString, CStr};
 use std::mem::MaybeUninit;
+use std::ptr;
+use std::rc::Rc;
 
 pub struct Features {}
 
@@ -31,9 +33,37 @@ pub struct Instance {
     engine_name:          CString,
 }
 
+type QueueFamily = u32;
+
+#[derive(Default)]
+struct GpuQueueFamilies
+{
+    graphics: Option<QueueFamily>,
+    present:  Option<QueueFamily>,
+    compute:  Option<QueueFamily>,
+    transfer: Option<QueueFamily>,
+}
+
+#[derive(Default)]
+pub struct SwapchainSupportInfo
+{
+    capabilities:  api::VkSurfaceCapabilitiesKHR,
+    formats:       Vec<api::VkSurfaceFormatKHR>,
+    present_modes: Vec<api::VkPresentModeKHR>,
+}
+
 pub struct Gpu {
-    handle: api::VkPhysicalDevice,
-    //todo:
+    pub handle:                             api::VkPhysicalDevice,
+    pub properties:                         api::VkPhysicalDeviceProperties,
+    pub features:                           api::VkPhysicalDeviceFeatures,
+    pub memory_properties:                  api::VkPhysicalDeviceMemoryProperties,
+    pub queue_infos:                        GpuQueueFamilies,
+    pub swapchain_support_info:             SwapchainSupportInfo,
+    pub supports_device_local_host_visible: bool,
+    // supported swapchain surface format
+    //surface_format: VkSurfaceFormatKHR;
+    // supported swapchain depth format
+    //depth_format: VkFormat;
 }
 
 pub struct Display {
@@ -59,10 +89,10 @@ pub struct Device {
     surface:   Surface,
     //swapchain: Swapchain,
 
-    //gpus:     Vec<Rc<Gpu>>,
+    gpus:     Vec<Rc<Gpu>>,
     //displays: Vec<Rc<Display>>,
 
-    //gpu:     Rc<Gpu>,
+    gpu:     Rc<Gpu>,
     //display: Rc<Display>,
 }
 
@@ -328,6 +358,7 @@ impl Surface {
                 );
                 Ok(Surface {
                     handle: unsafe { surf.assume_init() },
+
                 })
             }
             else {
@@ -341,30 +372,118 @@ impl Surface {
     }
 }
 
-impl Device {
-    pub fn new(create_info: CreateInfo) -> Device {
-        let instance = match Instance::new(create_info.software_version, create_info.software_name.as_str()) {
-            Ok(inst)     => inst,
-            Err(reason)  => panic!("Failed to create vulkan instance: {}", reason),
-        };
+impl Gpu {
+    fn get_queue_families(instance: &Instance, surface: &Surface, gpu: api::VkPhysicalDevice) -> GpuQueueFamilies {
+        let mut result = GpuQueueFamilies::default();
 
-        let surface = match Surface::new(&instance, create_info.surface) {
-            Ok(surf)     => surf,
-            Err(reason)  => panic!("Failed to create vulkan surface: {}", reason),
-        };
+        let queue_properties = instance.inst_fns.enumerate_gpu_queue_family_properties(gpu);
 
-        return Device{
-            instance,
-            surface,
-        };
+        // Iterate  over each queue family and select each queue of based on a score to determine if the queue
+        // is a *unique* queue. If no unique queue is found, a duplicate is selected.
+        let min_transfer_score: u32 = 255;
+        let mut queue_family_index: u32 = 0;
+        for property in queue_properties {
+            let mut current_transfer_score: u8 = 0;
+
+            // Graphics queue?
+            if (property.queueFlags & api::VK_QUEUE_GRAPHICS_BIT) != 0 {
+                result.graphics = Some(queue_family_index);
+                current_transfer_score += 1;
+            }
+
+            // Compute queue?
+            if (property.queueFlags & api::VK_QUEUE_COMPUTE_BIT) != 0 {
+                result.compute = Some(queue_family_index);
+                current_transfer_score += 1;
+            }
+
+            // Does this queue family support the present queue? If so, yoink it.
+            let mut supports_present: api::VkBool32 = api::VK_FALSE;
+            util::call_throw!(instance.inst_fns.get_gpu_surface_support, gpu, queue_family_index, surface.handle, &mut supports_present);
+
+            if supports_present == api::VK_TRUE {
+                result.present = Some(queue_family_index);
+            }
+
+            queue_family_index += 1;
+        }
+
+        return result;
     }
 
-    fn does_gpu_meet_requirements(gpu: api::VkPhysicalDevice) -> bool {
-        false
+    pub fn query_swapchain_capabilities(instance: &Instance, surface: &Surface, gpu: api::VkPhysicalDevice) -> SwapchainSupportInfo {
+        // Surface capabilities
+        let mut capabilities_unsafe = MaybeUninit::<api::VkSurfaceCapabilitiesKHR>::uninit();
+        util::call_throw!(instance.inst_fns.get_gpu_surface_capabilities, gpu, surface.handle, capabilities_unsafe.as_mut_ptr());
+
+        // Surface formats
+        let formats = instance.inst_fns.enumerate_gpu_surface_formats(gpu, surface.handle);
+
+        // Present modes
+        let present_modes = instance.inst_fns.enumerate_gpu_present_modes(gpu, surface.handle);
+
+        return SwapchainSupportInfo{ capabilities: unsafe { capabilities_unsafe.assume_init() }, formats, present_modes };
     }
 
-    fn enumerate_gpus(instance: &Instance) -> Vec<Gpu> {
-        let mut result = Vec::<Gpu>::new();
+    fn does_gpu_meet_requirements(instance: &Instance, surface: &Surface, gpu: api::VkPhysicalDevice, gpu_features: &api::VkPhysicalDeviceFeatures) -> bool {
+        let queue_families = Self::get_queue_families(instance, surface, gpu);
+
+        let has_present  = queue_families.present.is_some();
+        let has_graphics = queue_families.graphics.is_some();
+        let has_transfer = queue_families.transfer.is_some();
+        let has_compute  = queue_families.compute.is_some();
+        if !has_present || !has_graphics {
+            println!("Missing required queues");
+            return false;
+        }
+
+        let swapchain_info = Self::query_swapchain_capabilities(instance, surface, gpu);
+        if swapchain_info.formats.is_empty() || swapchain_info.present_modes.is_empty() {
+            // missing presentable surface
+            println!("Missing presentation surface");
+            return false;
+        }
+
+        // Check for sampler anisotropy
+        const REQUIRE_ANISOTROPY: bool = true;
+        if REQUIRE_ANISOTROPY && gpu_features.samplerAnisotropy != api::VK_TRUE {
+            println!("Requested anisotropy, but not found.");
+            return false;
+        }
+
+        // Make sure the gpu supports all required extensions
+        let mut swapchain_extension_found = false;
+        let mut semaphore_timelines_found = false;
+        let mut portability_subset_found  = false;
+
+        let extensions = instance.inst_fns.enumerate_device_extensions(gpu);
+        for extension in extensions {
+            let ext_c_str = char_array_as_cstr!(extension.extensionName);
+
+            if ext_c_str == byte_array_as_cstr!(api::VK_KHR_SWAPCHAIN_EXTENSION_NAME) {
+                swapchain_extension_found = true;
+            } else if ext_c_str == byte_array_as_cstr!(api::VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) {
+                semaphore_timelines_found = true;
+            } else if ext_c_str == byte_array_as_cstr!(consts::VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) {
+                portability_subset_found = true;
+            }
+        }
+
+        if !swapchain_extension_found || !semaphore_timelines_found {
+            // could not find required extensions
+            println!("Could not find required extensions");
+            return false;
+        }
+
+        if portability_subset_found {
+            println!("TODO: Portability subset was found. I should probably enable it somehow, i guess...");
+        }
+
+        true
+    }
+
+    fn enumerate_gpus(instance: &Instance, surface: &Surface) -> Vec<Rc<Gpu>> {
+        let mut result = Vec::<Rc<Gpu>>::new();
 
         let vk_gpus = instance.inst_fns.enumerate_gpus(instance.handle);
         for gpu in vk_gpus.into_iter() {
@@ -393,19 +512,63 @@ impl Device {
                 }
             }
 
-            if !Device::does_gpu_meet_requirements(gpu) {
+            if !Gpu::does_gpu_meet_requirements(instance, surface, gpu, &features) {
                 continue;
             }
 
-            // todo: swapchain support
+            let adapter = Rc::new(Gpu{
+                handle:                             gpu,
+                properties,
+                features,
+                memory_properties:                  memory,
+                queue_infos:                        Gpu::get_queue_families(instance, surface, gpu),
+                swapchain_support_info:             Gpu::query_swapchain_capabilities(instance, surface, gpu),
+                supports_device_local_host_visible,
+            });
 
-            // todo: get queue families
-
-            // todo: get supported surface formats
-
-            // todo: create gpu
+            result.push(adapter);
         }
 
         result
+    }
+}
+
+impl Device {
+    pub fn new(create_info: CreateInfo) -> Device {
+        let instance = match Instance::new(create_info.software_version, create_info.software_name.as_str()) {
+            Ok(inst)     => inst,
+            Err(reason)  => panic!("Failed to create vulkan instance: {}", reason),
+        };
+
+        let surface = match Surface::new(&instance, create_info.surface) {
+            Ok(surf)     => surf,
+            Err(reason)  => panic!("Failed to create vulkan surface: {}", reason),
+        };
+
+        let gpus = Gpu::enumerate_gpus(&instance, &surface);
+        assert!(gpus.len() > 0);
+
+        let chosen_gpu: Rc<Gpu> = Self::select_gpu(&gpus);
+
+        return Device{
+            instance,
+            surface,
+            gpus,
+            gpu: chosen_gpu,
+        };
+    }
+
+    pub fn select_gpu(gpu_list: &Vec<Rc<Gpu>>) -> Rc<Gpu> {
+        assert!(gpu_list.len() > 0);
+
+        for gpu in gpu_list {
+            if (gpu.properties.deviceType & api::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) != 0
+            {
+                return gpu.clone();
+            }
+        };
+
+        println!("[WARN] Device::select_gpu :: Failed to find a discrete gpu. Falling back to the first available gpu.");
+        return gpu_list[0].clone();
     }
 }

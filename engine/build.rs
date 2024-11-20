@@ -139,8 +139,7 @@ fn gen_vulkan_bindings()
 fn generate_glfw_bindings() {
     // This is the directory where the `c` library is located.
     let libdir_path = PathBuf::from("vendor/glfw/3.4/bin/glfw/build-release/src/")
-        // Canonicalize the path as `rustc-link-search` requires an absolute
-        // path.
+        // Canonicalize the path as `rustc-link-search` requires an absolute path.
         .canonicalize()
         .expect("cannot canonicalize path");
 

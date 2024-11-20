@@ -102,33 +102,94 @@ impl GlobalFnTable {
 
 pub struct InstanceFnTable
 {
-    pub(crate) create_device:              FN_vkCreateDevice,
-    pub(crate) destroy_instance:           FN_vkDestroyInstance,
-    pub(crate) destroy_surface:            FN_vkDestroySurfaceKHR,
-    pub(crate) enum_device_ext_props:      FN_vkEnumerateDeviceExtensionProperties,
-    enum_physical_devices:                 FN_vkEnumeratePhysicalDevices,
+    pub(crate) create_device:                FN_vkCreateDevice,
+    pub(crate) destroy_instance:             FN_vkDestroyInstance,
+    pub(crate) destroy_surface:              FN_vkDestroySurfaceKHR,
 
-    pub(crate) get_gpu_memory_properties:  FN_vkGetPhysicalDeviceMemoryProperties,
-    pub(crate) get_gpu_properties:         FN_vkGetPhysicalDeviceProperties,
-    pub(crate) get_gpu_features:           FN_vkGetPhysicalDeviceFeatures,
+    enum_gpu_ext_props:                      FN_vkEnumerateDeviceExtensionProperties,
+    enum_physical_devices:                   FN_vkEnumeratePhysicalDevices,
 
-    pub(crate) get_phy_queue_family_props: FN_vkGetPhysicalDeviceQueueFamilyProperties,
-    pub(crate) get_phy_surface_caps:       FN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
-    pub(crate) get_phy_surface_support:    FN_vkGetPhysicalDeviceSurfaceSupportKHR,
+    pub(crate) get_gpu_memory_properties:    FN_vkGetPhysicalDeviceMemoryProperties,
+    pub(crate) get_gpu_properties:           FN_vkGetPhysicalDeviceProperties,
+    pub(crate) get_gpu_features:             FN_vkGetPhysicalDeviceFeatures,
+
+    pub(crate) get_gpu_surface_capabilities: FN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
+    pub(crate) get_gpu_surface_support:      FN_vkGetPhysicalDeviceSurfaceSupportKHR,
+
+    get_gpu_surface_formats:                 FN_vkGetPhysicalDeviceSurfaceFormatsKHR,
+    get_gpu_queue_family_properties:         FN_vkGetPhysicalDeviceQueueFamilyProperties,
+    get_gpu_surface_present_modes:           FN_vkGetPhysicalDeviceSurfacePresentModesKHR,
+
     #[cfg(target_os = "linux")]
-    pub(crate) create_wayland_surface:     PFN_vkCreateWaylandSurfaceKHR,
+    pub(crate) create_wayland_surface:       PFN_vkCreateWaylandSurfaceKHR,
     #[cfg(target_os = "linux")]
-    pub(crate) create_xlib_surface:        PFN_vkCreateXlibSurfaceKHR,
+    pub(crate) create_xlib_surface:          PFN_vkCreateXlibSurfaceKHR,
     #[cfg(target_os = "windows")]
-    pub(crate) create_win32_surface:       PFN_vkCreateWin32SurfaceKHR,
+    pub(crate) create_win32_surface:         PFN_vkCreateWin32SurfaceKHR,
 
-    pub(crate) create_debug_messenger:  PFN_vkCreateDebugUtilsMessengerEXT,         // note(enlynn): don't need to *always* load this function
-    pub(crate) destroy_debug_messenger: PFN_vkDestroyDebugUtilsMessengerEXT,
+    pub(crate) create_debug_messenger:       PFN_vkCreateDebugUtilsMessengerEXT,         // note(enlynn): don't need to *always* load this function
+    pub(crate) destroy_debug_messenger:      PFN_vkDestroyDebugUtilsMessengerEXT,
 }
 
 impl InstanceFnTable {
-    pub fn enumerate_device_extensions(&self) {
-        todo!()
+    pub fn enumerate_gpu_present_modes(&self, gpu: VkPhysicalDevice, surface: VkSurfaceKHR) -> Vec<VkPresentModeKHR> {
+        let mut present_mode_count: u32 = 0;
+        call_throw!(self.get_gpu_surface_present_modes, gpu, surface, &mut present_mode_count, ptr::null_mut());
+
+        if present_mode_count > 0 {
+            let mut present_mdoes = Vec::<VkPresentModeKHR>::with_capacity(present_mode_count as usize);
+            present_mdoes.resize(present_mode_count as usize, VkPresentModeKHR::default());
+            call_throw!(self.get_gpu_surface_present_modes, gpu, surface, &mut present_mode_count, present_mdoes.as_mut_ptr());
+
+            return present_mdoes;
+        } else {
+            return Vec::with_capacity(0);
+        }
+    }
+
+    pub fn enumerate_gpu_surface_formats(&self, gpu: VkPhysicalDevice, surface: VkSurfaceKHR) -> Vec<VkSurfaceFormatKHR> {
+        let mut format_count: u32 = 0;
+        call_throw!(self.get_gpu_surface_formats, gpu, surface, &mut format_count, ptr::null_mut());
+
+        if format_count > 0 {
+            let mut formats = Vec::<VkSurfaceFormatKHR>::with_capacity(format_count as usize);
+            formats.resize(format_count as usize, VkSurfaceFormatKHR::default());
+            call_throw!(self.get_gpu_surface_formats, gpu, surface, &mut format_count, formats.as_mut_ptr());
+
+            return formats;
+        } else {
+            return Vec::with_capacity(0);
+        }
+    }
+
+    pub fn enumerate_gpu_queue_family_properties(&self, gpu: VkPhysicalDevice) -> Vec<VkQueueFamilyProperties> {
+        let mut queue_count: u32 = 0;
+        call!(self.get_gpu_queue_family_properties, gpu, &mut queue_count as *mut u32, ptr::null_mut());
+
+        if queue_count > 0 {
+            let mut properties = Vec::<VkQueueFamilyProperties>::with_capacity(queue_count as usize);
+            properties.resize(queue_count as usize, VkQueueFamilyProperties::default());
+            call!(self.get_gpu_queue_family_properties, gpu, &mut queue_count as *mut u32, properties.as_mut_ptr());
+
+            return properties;
+        } else {
+            return Vec::with_capacity(0);
+        }
+    }
+
+    pub fn enumerate_device_extensions(&self, gpu: VkPhysicalDevice) -> Vec<VkExtensionProperties> {
+        let mut ext_count: u32 = 0;
+        call_throw!(self.enum_gpu_ext_props, gpu, ptr::null_mut(), &mut ext_count as *mut u32, ptr::null_mut());
+
+        if ext_count > 0 {
+            let mut extensions = Vec::<VkExtensionProperties>::with_capacity(ext_count as usize);
+            extensions.resize(ext_count as usize, VkExtensionProperties::default());
+            call_throw!(self.enum_gpu_ext_props, gpu, ptr::null_mut(), &mut ext_count as *mut u32, extensions.as_mut_ptr());
+
+            return extensions;
+        } else {
+            return Vec::with_capacity(0);
+        }
     }
 
     pub fn enumerate_gpus(&self, instance: VkInstance) -> Vec<VkPhysicalDevice> {
@@ -275,17 +336,19 @@ pub fn load_instance_functions(gbl: &GlobalFnTable, inst: VkInstance) -> Result<
     };
 
     let funcs = InstanceFnTable {
-        create_device:              get_inst_procaddr!(inst, vkCreateDevice),
-        destroy_instance:           get_inst_procaddr!(inst, vkDestroyInstance),
-        destroy_surface:            get_inst_procaddr!(inst, vkDestroySurfaceKHR),
-        enum_device_ext_props:      get_inst_procaddr!(inst, vkEnumerateDeviceExtensionProperties),
-        enum_physical_devices:      get_inst_procaddr!(inst, vkEnumeratePhysicalDevices),
-        get_gpu_memory_properties:  get_inst_procaddr!(inst, vkGetPhysicalDeviceMemoryProperties),
-        get_gpu_properties:         get_inst_procaddr!(inst, vkGetPhysicalDeviceProperties),
-        get_gpu_features:           get_inst_procaddr!(inst, vkGetPhysicalDeviceFeatures),
-        get_phy_queue_family_props: get_inst_procaddr!(inst, vkGetPhysicalDeviceQueueFamilyProperties),
-        get_phy_surface_caps:       get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceCapabilitiesKHR),
-        get_phy_surface_support:    get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceSupportKHR),
+        create_device:                   get_inst_procaddr!(inst, vkCreateDevice),
+        destroy_instance:                get_inst_procaddr!(inst, vkDestroyInstance),
+        destroy_surface:                 get_inst_procaddr!(inst, vkDestroySurfaceKHR),
+        enum_gpu_ext_props:              get_inst_procaddr!(inst, vkEnumerateDeviceExtensionProperties),
+        enum_physical_devices:           get_inst_procaddr!(inst, vkEnumeratePhysicalDevices),
+        get_gpu_memory_properties:       get_inst_procaddr!(inst, vkGetPhysicalDeviceMemoryProperties),
+        get_gpu_properties:              get_inst_procaddr!(inst, vkGetPhysicalDeviceProperties),
+        get_gpu_features:                get_inst_procaddr!(inst, vkGetPhysicalDeviceFeatures),
+        get_gpu_queue_family_properties: get_inst_procaddr!(inst, vkGetPhysicalDeviceQueueFamilyProperties),
+        get_gpu_surface_present_modes:   get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfacePresentModesKHR),
+        get_gpu_surface_capabilities:    get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceCapabilitiesKHR),
+        get_gpu_surface_formats:         get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceFormatsKHR),
+        get_gpu_surface_support:         get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceSupportKHR),
         #[cfg(target_os = "linux")]
         create_wayland_surface:     get_inst_procaddr_optional!(inst, vkCreateWaylandSurfaceKHR),
         #[cfg(target_os = "linux")]

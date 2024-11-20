@@ -73,3 +73,52 @@ impl Default for VkExtensionProperties {
         }
     }
 }
+
+impl Default for VkQueueFamilyProperties {
+    fn default() -> Self {
+        Self{
+            queueFlags:                  0,
+            queueCount:                  0,
+            timestampValidBits:          0,
+            minImageTransferGranularity: VkExtent3D::default(),
+        }
+    }
+}
+
+impl Default for VkSurfaceFormatKHR {
+    fn default() -> Self {
+        Self{
+            format:     VK_FORMAT_UNDEFINED,
+            colorSpace: VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        }
+    }
+}
+
+impl Default for VkExtent2D {
+    fn default() -> Self {
+        Self{ width: 0, height: 0 }
+    }
+}
+
+impl Default for VkExtent3D {
+    fn default() -> Self {
+        Self{ width: 0, height: 0, depth: 0 }
+    }
+}
+
+impl Default for VkSurfaceCapabilitiesKHR {
+    fn default() -> Self {
+        Self {
+            minImageCount:           0,
+            maxImageCount:           0,
+            currentExtent:           VkExtent2D::default(),
+            minImageExtent:          VkExtent2D::default(),
+            maxImageExtent:          VkExtent2D::default(),
+            maxImageArrayLayers:     0,
+            supportedTransforms:     0,
+            currentTransform:        0,
+            supportedCompositeAlpha: VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            supportedUsageFlags:     0,
+        }
+    }
+}
