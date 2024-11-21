@@ -197,8 +197,10 @@ impl Instance {
         // We want 2 specific platform extensions:
         // 1. Surface KHR extension
         // 2. Platform Surface KHR extension
+        // 3. Physical Device Properties 2
         let mut surface_ext_found          = false;
         let mut platform_surface_ext_found = false;
+        let mut device_props2_ext_found    = false;
 
         // TODO(enlynn): other operating systems
         let platform_surface_ext = if cfg!(target_os = "linux") {
@@ -226,6 +228,13 @@ impl Instance {
                 instance_ext_strings.push(string);
 
                 surface_ext_found = true;
+            } else if ext_c_str == byte_array_as_cstr!(api::VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
+                let string: CString = ext_c_str.into();
+
+                instance_exts.push(string.as_ptr());
+                instance_ext_strings.push(string);
+
+                device_props2_ext_found = true;
             } else if ext_c_str == platform_surface_ext {
                 let string: CString = ext_c_str.into();
 
@@ -246,6 +255,10 @@ impl Instance {
         // These extensions are required for rendering to the Swapchain, so failing to find them is a fatal error.
         if !surface_ext_found {
             return Err("Surface extension for Vulkan not found".to_string());
+        }
+
+        if !device_props2_ext_found {
+            return Err("Failed to find instance extension: VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME".to_string());
         }
 
         if !platform_surface_ext_found {

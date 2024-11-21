@@ -6,6 +6,7 @@
 
 mod window;
 mod renderer;
+mod math;
 
 pub mod core;
 
