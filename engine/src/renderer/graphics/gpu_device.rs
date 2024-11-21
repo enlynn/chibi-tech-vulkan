@@ -5,7 +5,8 @@ use crate::util::ffi::*;
 
 use super::api;
 use super::consts;
-use super::gpu_utils as util;
+use super::gpu_utils          as util;
+use super::gpu_device_context as context;
 
 use std::borrow::Borrow;
 use std::ffi::{CString, CStr};
@@ -78,14 +79,6 @@ pub struct Display {
 
 pub struct Surface {
     handle: api::VkSurfaceKHR,
-}
-
-pub struct SwapchainImage {
-
-}
-
-pub struct Swapchain {
-    images: [SwapchainImage; consts::MAX_BUFFERED_FRAMES],
 }
 
 pub struct Device {
@@ -725,5 +718,9 @@ impl Device {
 
         println!("[WARN] Device::select_gpu :: Failed to find a discrete gpu. Falling back to the first available gpu.");
         return gpu_list[0].clone();
+    }
+
+    pub fn create_device_context(device: Rc<Self>) -> context::DeviceContext {
+        return context::DeviceContext::new(device);
     }
 }
