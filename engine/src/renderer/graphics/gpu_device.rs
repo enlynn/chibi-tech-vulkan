@@ -1,4 +1,5 @@
 
+use crate::renderer::graphics::gpu_utils::call_throw;
 use crate::window::NativeSurface;
 use crate::util::ffi::*;
 
@@ -11,6 +12,11 @@ use std::ffi::{CString, CStr};
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::rc::Rc;
+
+//
+// TODO:
+// - Device Extensions require modifying 2 locations (is device valid, and device creation), which is not great. centralize this into an array.
+//
 
 pub struct Features {}
 
@@ -36,7 +42,7 @@ pub struct Instance {
 type QueueFamily = u32;
 
 #[derive(Default)]
-struct GpuQueueFamilies
+pub struct GpuQueueFamilies
 {
     graphics: Option<QueueFamily>,
     present:  Option<QueueFamily>,
@@ -83,7 +89,8 @@ pub struct Swapchain {
 }
 
 pub struct Device {
-    //fns: util::DeviceFnTable
+    fns:       util::DeviceFnTable,
+    handle:    api::VkDevice,
 
     instance:  Instance,
     surface:   Surface,
@@ -454,7 +461,6 @@ impl Gpu {
         // Make sure the gpu supports all required extensions
         let mut swapchain_extension_found = false;
         let mut semaphore_timelines_found = false;
-        let mut portability_subset_found  = false;
 
         let extensions = instance.inst_fns.enumerate_device_extensions(gpu);
         for extension in extensions {
@@ -464,8 +470,6 @@ impl Gpu {
                 swapchain_extension_found = true;
             } else if ext_c_str == byte_array_as_cstr!(api::VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) {
                 semaphore_timelines_found = true;
-            } else if ext_c_str == byte_array_as_cstr!(consts::VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) {
-                portability_subset_found = true;
             }
         }
 
@@ -473,10 +477,6 @@ impl Gpu {
             // could not find required extensions
             println!("Could not find required extensions");
             return false;
-        }
-
-        if portability_subset_found {
-            println!("TODO: Portability subset was found. I should probably enable it somehow, i guess...");
         }
 
         true
@@ -531,6 +531,17 @@ impl Gpu {
 
         result
     }
+
+    pub fn require_portability_subset(&self, instance: &Instance) -> bool {
+        let extensions = instance.inst_fns.enumerate_device_extensions(self.handle);
+        for extension in extensions {
+            let ext_c_str = char_array_as_cstr!(extension.extensionName);
+            if ext_c_str == byte_array_as_cstr!(consts::VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 impl Device {
@@ -548,9 +559,131 @@ impl Device {
         let gpus = Gpu::enumerate_gpus(&instance, &surface);
         assert!(gpus.len() > 0);
 
-        let chosen_gpu: Rc<Gpu> = Self::select_gpu(&gpus);
+        let chosen_gpu: Rc<Gpu> = Self::select_gpu(&gpus, None);
+
+        //---------------------------------------------------------------------------------------//
+        // Create Logical Device
+
+        // 1. Create a list of unique queues
+        const MAX_QUEUES: usize = 4;
+        let all_queues: [Option<u32>; MAX_QUEUES] = [
+            chosen_gpu.queue_infos.present,
+            chosen_gpu.queue_infos.graphics,
+            chosen_gpu.queue_infos.compute,
+            chosen_gpu.queue_infos.transfer,
+        ];
+
+        let mut unique_queues: [u32; MAX_QUEUES] = [0; MAX_QUEUES];
+        let mut queue_count = 0u32;
+
+        for queue_option in all_queues {
+            if let Some(queue) = queue_option {
+                let mut found = false;
+                for i in 0..queue_count {
+                    if queue == unique_queues[i as usize] {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if !found {
+                    unique_queues[queue_count as usize] = queue;
+                    queue_count += 1;
+                }
+            }
+        }
+
+        let queue_priority: f32 = 1.0;
+
+        let mut queue_ci: [api::VkDeviceQueueCreateInfo; MAX_QUEUES] = [api::VkDeviceQueueCreateInfo::default(); MAX_QUEUES];
+        for i in 0..queue_count {
+            queue_ci[i as usize].queueFamilyIndex = unique_queues[i as usize];
+            queue_ci[i as usize].queueCount       = 1;
+            queue_ci[i as usize].pQueuePriorities = &queue_priority;
+        }
+
+        // 2. Enable Optional Features
+        //   - Device Address (allows for direct GPU access)
+        //   - Synchronization2
+        //   - Timeline Semaphores
+        use core::ffi::c_void;
+
+        let mut feature_device_addr = api::VkPhysicalDeviceBufferDeviceAddressFeatures::default();
+        feature_device_addr.bufferDeviceAddress = api::VK_TRUE;
+
+        let feature_device_addr_ptr: *mut api::VkPhysicalDeviceBufferDeviceAddressFeatures = &mut feature_device_addr;
+
+        let mut feature_sync2 = api::VkPhysicalDeviceSynchronization2Features::default();
+        feature_sync2.synchronization2 = api::VK_TRUE;
+        feature_sync2.pNext = feature_device_addr_ptr as *mut c_void;
+
+        let feature_sync2_ptr: *mut api::VkPhysicalDeviceSynchronization2Features = &mut feature_sync2;
+
+        let mut feature_timeline = api::VkPhysicalDeviceTimelineSemaphoreFeatures::default();
+        feature_timeline.timelineSemaphore = api::VK_TRUE;
+        feature_timeline.pNext = feature_sync2_ptr as *mut c_void;
+
+        let feature_timeline_ptr: *mut api::VkPhysicalDeviceTimelineSemaphoreFeatures = &mut feature_timeline;
+
+        //let enabled_features = api::VkPhysicalDeviceFeatures::default();
+        // left here in case I want to override the defaults in the future
+
+        let mut enabled_features2 = api::VkPhysicalDeviceFeatures2{
+            pNext: feature_timeline_ptr as *mut c_void,
+            ..Default::default()
+        };
+
+        let enabled_features2_ptr: *mut api::VkPhysicalDeviceFeatures2 = &mut enabled_features2;
+
+        // 3. Build the list of device extensions
+
+        let mut extension_list_strings = Vec::<CString>::with_capacity(3);
+        let mut extension_list         = Vec::<*const std::os::raw::c_char>::with_capacity(3);
+
+        let swapchain_ext_string: CString = byte_array_as_cstr!(api::VK_KHR_SWAPCHAIN_EXTENSION_NAME).into();
+        let semaphore_ext_string: CString = byte_array_as_cstr!(api::VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME).into();
+
+        extension_list.push(swapchain_ext_string.as_ptr());
+        extension_list.push(semaphore_ext_string.as_ptr());
+
+        extension_list_strings.push(swapchain_ext_string);
+        extension_list_strings.push(semaphore_ext_string);
+
+        if chosen_gpu.require_portability_subset(&instance) {
+            let portability_ext_string: CString = byte_array_as_cstr!(consts::VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME).into();
+            extension_list.push(portability_ext_string.as_ptr());
+            extension_list_strings.push(portability_ext_string);
+        }
+
+        // 4. Create the Device!
+
+        let mut device_ci = api::VkDeviceCreateInfo::default();
+        device_ci.queueCreateInfoCount    = queue_count;
+        device_ci.pQueueCreateInfos       = queue_ci.as_ptr();
+        device_ci.enabledExtensionCount   = extension_list.len() as u32;
+        device_ci.ppEnabledExtensionNames = extension_list.as_mut_ptr();
+        device_ci.pNext                   = enabled_features2_ptr as *mut c_void;
+
+        let mut device_handle: api::VkDevice = std::ptr::null_mut();
+        call_throw!(instance.inst_fns.create_device, chosen_gpu.handle, &device_ci as *const _, ptr::null(), &mut device_handle as *mut _);
+
+        //---------------------------------------------------------------------------------------//
+        // Load Device Functions
+
+        let device_fns = util::load_device_functions(&instance.glb_fns, instance.handle, device_handle).expect("Failed to load Vulkan Device level functions");
+
+        //---------------------------------------------------------------------------------------//
+        // TODO:
+        // - Get the Command Queues
+        // - Create the Swapchain
+        // - Load the Vulkan Memory Allocator
+
+        //---------------------------------------------------------------------------------------//
+        // (Finally) Return the Device
 
         return Device{
+            fns: device_fns,
+            handle: device_handle,
             instance,
             surface,
             gpus,
@@ -558,15 +691,24 @@ impl Device {
         };
     }
 
-    pub fn select_gpu(gpu_list: &Vec<Rc<Gpu>>) -> Rc<Gpu> {
+    /// If None is passed as gpu_index, then the first available Discrete GPU is chosen.
+    pub fn select_gpu(gpu_list: &Vec<Rc<Gpu>>, gpu_index: Option<usize>) -> Rc<Gpu> {
         assert!(gpu_list.len() > 0);
 
-        for gpu in gpu_list {
-            if (gpu.properties.deviceType & api::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) != 0
-            {
-                return gpu.clone();
+        if let Some(index) = gpu_index {
+            if index < gpu_list.len() {
+                return gpu_list[index].clone();
             }
-        };
+        }
+        else
+        {
+            for gpu in gpu_list {
+                if (gpu.properties.deviceType & api::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) != 0
+                {
+                    return gpu.clone();
+                }
+            }
+        }
 
         println!("[WARN] Device::select_gpu :: Failed to find a discrete gpu. Falling back to the first available gpu.");
         return gpu_list[0].clone();

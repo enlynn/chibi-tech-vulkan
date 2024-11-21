@@ -122,3 +122,137 @@ impl Default for VkSurfaceCapabilitiesKHR {
         }
     }
 }
+
+impl Default for VkDeviceQueueCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            pNext:            ptr::null_mut(),
+            flags:            0,
+            queueFamilyIndex: 0,
+            queueCount:       0,
+            pQueuePriorities: ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for VkPhysicalDeviceBufferDeviceAddressFeatures {
+    fn default() -> Self {
+        Self {
+            sType:                            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
+            pNext:                            ptr::null_mut(),
+            bufferDeviceAddress:              VK_FALSE,
+            bufferDeviceAddressCaptureReplay: VK_FALSE,
+            bufferDeviceAddressMultiDevice:   VK_FALSE,
+        }
+    }
+}
+
+impl Default for VkPhysicalDeviceSynchronization2Features {
+    fn default() -> Self {
+        Self{
+            sType:            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+            pNext:            ptr::null_mut(),
+            synchronization2: VK_FALSE,
+        }
+    }
+}
+
+impl Default for VkPhysicalDeviceTimelineSemaphoreFeatures {
+    fn default() -> Self {
+        Self{
+            sType:             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
+            pNext:             ptr::null_mut(),
+            timelineSemaphore: VK_FALSE,
+        }
+    }
+}
+
+impl Default for VkPhysicalDeviceFeatures {
+    fn default() -> Self {
+        Self{
+            robustBufferAccess: VK_FALSE,
+            fullDrawIndexUint32: VK_FALSE,
+            imageCubeArray: VK_FALSE,
+            independentBlend: VK_FALSE,
+            geometryShader: VK_FALSE,
+            tessellationShader: VK_FALSE,
+            sampleRateShading: VK_FALSE,
+            dualSrcBlend: VK_FALSE,
+            logicOp: VK_FALSE,
+            multiDrawIndirect: VK_FALSE,
+            drawIndirectFirstInstance: VK_FALSE,
+            depthClamp: VK_FALSE,
+            depthBiasClamp: VK_FALSE,
+            fillModeNonSolid: VK_FALSE,
+            depthBounds: VK_FALSE,
+            wideLines: VK_FALSE,
+            largePoints: VK_FALSE,
+            alphaToOne: VK_FALSE,
+            multiViewport: VK_FALSE,
+            samplerAnisotropy: VK_FALSE,
+            textureCompressionETC2: VK_FALSE,
+            textureCompressionASTC_LDR: VK_FALSE,
+            textureCompressionBC: VK_FALSE,
+            occlusionQueryPrecise: VK_FALSE,
+            pipelineStatisticsQuery: VK_FALSE,
+            vertexPipelineStoresAndAtomics: VK_FALSE,
+            fragmentStoresAndAtomics: VK_FALSE,
+            shaderTessellationAndGeometryPointSize: VK_FALSE,
+            shaderImageGatherExtended: VK_FALSE,
+            shaderStorageImageExtendedFormats: VK_FALSE,
+            shaderStorageImageMultisample: VK_FALSE,
+            shaderStorageImageReadWithoutFormat: VK_FALSE,
+            shaderStorageImageWriteWithoutFormat: VK_FALSE,
+            shaderUniformBufferArrayDynamicIndexing: VK_FALSE,
+            shaderSampledImageArrayDynamicIndexing: VK_FALSE,
+            shaderStorageBufferArrayDynamicIndexing: VK_FALSE,
+            shaderStorageImageArrayDynamicIndexing: VK_FALSE,
+            shaderClipDistance: VK_FALSE,
+            shaderCullDistance: VK_FALSE,
+            shaderFloat64: VK_FALSE,
+            shaderInt64: VK_FALSE,
+            shaderInt16: VK_FALSE,
+            shaderResourceResidency: VK_FALSE,
+            shaderResourceMinLod: VK_FALSE,
+            sparseBinding: VK_FALSE,
+            sparseResidencyBuffer: VK_FALSE,
+            sparseResidencyImage2D: VK_FALSE,
+            sparseResidencyImage3D: VK_FALSE,
+            sparseResidency2Samples: VK_FALSE,
+            sparseResidency4Samples: VK_FALSE,
+            sparseResidency8Samples: VK_FALSE,
+            sparseResidency16Samples: VK_FALSE,
+            sparseResidencyAliased: VK_FALSE,
+            variableMultisampleRate: VK_FALSE,
+            inheritedQueries: VK_FALSE,
+        }
+    }
+}
+
+impl Default for VkPhysicalDeviceFeatures2 {
+    fn default() -> Self {
+        Self{
+            sType:    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            pNext:    ptr::null_mut(),
+            features: VkPhysicalDeviceFeatures::default(),
+        }
+    }
+}
+
+impl Default for VkDeviceCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                   VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            pNext:                   ptr::null_mut(),
+            flags:                   0,
+            queueCreateInfoCount:    0,
+            pQueueCreateInfos:       ptr::null_mut(),
+            enabledLayerCount:       0,
+            ppEnabledLayerNames:     ptr::null_mut(),
+            enabledExtensionCount:   0,
+            ppEnabledExtensionNames: ptr::null_mut(),
+            pEnabledFeatures:        ptr::null_mut(),
+        }
+    }
+}
