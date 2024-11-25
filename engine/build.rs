@@ -120,21 +120,75 @@ fn gen_vulkan_bindings()
         "vulkan",
         "vendor/vulkan/vulkan_wrapper.h",
         vec!["-Ivendor/vulkan/1.3.296/"],
-        vec!["vk.*"],
-        vec!["PFN.*", "Vk.*"],
-        vec!["Vk.*", "VK.*"],
+        vec!["vk.*", "vma.*"],
+        vec!["PFN.*", "Vk.*", "Vma.*"],
+        vec!["Vk.*", "VK.*", "Vma.*"],
     );
 
     let mut bindings_buf = String::new();
     bindings
         .write(Box::new(unsafe { bindings_buf.as_mut_vec() }))
-        .expect("Couldn't write Vulkan bindings");
+        .expect("Couldn't write Vulkan bindings.");
 
     parse_and_output_vulkan_bindings(bindings_buf);
+
+    // Now, let's create a smol library for vma
+    //
+    let libdir_path = PathBuf::from("vendor/vulkan")
+        .canonicalize()
+        .expect("cannot canonicalize path");
+
+    // This is the path to the intermediate object file for our library.
+    let src_path = libdir_path.join("vulkan_wrapper.c");
+    let obj_path = libdir_path.join("vulkan_wrapper.o");
+    // This is the path to the static library file.
+    let lib_path = libdir_path.join("libvma.a");
+
+    // todo: this should change based on the available compiler.
+    if !std::process::Command::new("clang++")
+        .arg("-std=c++17")
+        .arg("-Wno-missing-field-initializers")
+        .arg("-Wno-unused-variable")
+        .arg("-Wno-unused-parameter")
+        .arg("-Wno-unused-private-field")
+        .arg("-Wno-reorder")
+        .arg("-DVMA_STATIC_VULKAN_FUNCTIONS=0")
+        .arg("-DVMA_DYNAMIC_VULKAN_FUNCTIONS=0")
+        .arg("-c")
+        .arg("-o")
+        .arg(&obj_path)
+        .arg(&src_path)
+        .output()
+        .expect("could not spawn `clang`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not compile object file");
+    }
+
+    // Run `ar` to generate the library
+    if !std::process::Command::new("ar")
+        .arg("rcs")
+        .arg(lib_path)
+        .arg(obj_path)
+        .output()
+        .expect("could not spawn `ar`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not emit library file");
+    }
+
+    // Tell cargo to tell rustc to link the vma lib
+    println!("cargo:rustc-link-search={}", libdir_path.to_str().unwrap());
+    println!("cargo:rustc-link-lib=dylib=stdc++");
+    println!("cargo:rustc-link-lib=vma");
 }
 
 /* ======================================================================== */
-/* GLFW bindings                                                          */
+/* GLFW bindings                                                            */
 
 fn generate_glfw_bindings() {
     // This is the directory where the `c` library is located.

@@ -256,3 +256,163 @@ impl Default for VkDeviceCreateInfo {
         }
     }
 }
+
+impl Default for VkSwapchainCreateInfoKHR {
+    fn default() -> Self {
+        Self{
+            sType:                 VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+            pNext:                 ptr::null_mut(),
+            flags:                 0,
+            surface:               ptr::null_mut(),
+            minImageCount:         0,
+            imageFormat:           VK_FORMAT_UNDEFINED,
+            imageColorSpace:       VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            imageExtent:           VkExtent2D::default(),
+            imageArrayLayers:      0,
+            imageUsage:            0,
+            imageSharingMode:      VK_SHARING_MODE_EXCLUSIVE,
+            queueFamilyIndexCount: 0,
+            pQueueFamilyIndices:   ptr::null_mut(),
+            preTransform:          0,
+            compositeAlpha:        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            presentMode:           VK_PRESENT_MODE_IMMEDIATE_KHR,
+            clipped:               VK_FALSE,
+            oldSwapchain:          ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for VkComponentMapping {
+    fn default() -> Self{
+        Self{
+            r: VK_COMPONENT_SWIZZLE_IDENTITY,
+            g: VK_COMPONENT_SWIZZLE_IDENTITY,
+            b: VK_COMPONENT_SWIZZLE_IDENTITY,
+            a: VK_COMPONENT_SWIZZLE_IDENTITY,
+        }
+    }
+}
+
+impl Default for VkImageSubresourceRange{
+    fn default() -> Self {
+        Self{
+            aspectMask:     0,
+            baseMipLevel:   0,
+            levelCount:     0,
+            baseArrayLayer: 0,
+            layerCount:     0,
+        }
+    }
+}
+
+impl Default for VkImageViewCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            pNext:            ptr::null_mut(),
+            flags:            0,
+            image:            ptr::null_mut(),
+            viewType:         VK_IMAGE_VIEW_TYPE_2D,
+            format:           VK_FORMAT_UNDEFINED,
+            components:       VkComponentMapping::default(),
+            subresourceRange: VkImageSubresourceRange::default(),
+        }
+    }
+}
+
+impl Default for VkCommandPoolCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:            VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            pNext:            ptr::null(),
+            flags:            VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            queueFamilyIndex: 0,
+        }
+    }
+}
+
+impl Default for VkCommandBufferAllocateInfo {
+    fn default() -> Self {
+        Self{
+            sType:              VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            pNext:              ptr::null(),
+            commandPool:        ptr::null_mut(),
+            level:              VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            commandBufferCount: 0,
+        }
+    }
+}
+
+impl Default for VkSemaphoreCreateInfo {
+    fn default() -> Self {
+        Self {
+            sType: VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+        }
+    }
+}
+
+impl Default for VkSemaphoreTypeCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:         VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO_KHR,
+            pNext:         ptr::null(),
+            semaphoreType: VK_SEMAPHORE_TYPE_TIMELINE_KHR,
+            initialValue:  0,
+        }
+    }
+}
+
+impl Default for VkFenceCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType: VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            pNext: ptr::null(),
+            flags: 0,
+        }
+    }
+}
+
+impl Default for VmaAllocatorCreateInfo {
+    fn default() -> Self {
+        Self{
+            flags:                          0,
+            physicalDevice:                 ptr::null_mut(),
+            device:                         ptr::null_mut(),
+            preferredLargeHeapBlockSize:    0,
+            pAllocationCallbacks:           ptr::null_mut(),
+            pDeviceMemoryCallbacks:         ptr::null_mut(),
+            pHeapSizeLimit:                 ptr::null_mut(),
+            pVulkanFunctions:               ptr::null_mut(),
+            instance:                       ptr::null_mut(),
+            vulkanApiVersion:               VK_API_VERSION_1_3,
+            pTypeExternalMemoryHandleTypes: ptr::null_mut(),
+        }
+    }
+}
+
+impl Default for VmaAllocationCreateInfo {
+    fn default() -> Self{
+        Self{
+            flags:          0,
+            usage:          0,
+            requiredFlags:  0,
+            preferredFlags: 0,
+            memoryTypeBits: 0,
+            pool:           ptr::null_mut(),
+            pUserData:      ptr::null_mut(),
+            priority:       0.0,
+        }
+    }
+}
+
+impl Default for VkOffset3D {
+    fn default() -> Self {
+        Self{
+            x: 0,
+            y: 0,
+            z: 0,
+        }
+    }
+}

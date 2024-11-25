@@ -23,7 +23,7 @@ pub struct Engine {
     game:          RefCell<Box<dyn Game>>,
     window_system: window::WindowSystem,
     client_window: window::Window,
-    render_system: renderer::RenderSystem,
+    render_system: RefCell<renderer::RenderSystem>,
 }
 
 impl Engine {
@@ -40,7 +40,7 @@ impl Engine {
             game,
             window_system,
             client_window,
-            render_system,
+            render_system: RefCell::new(render_system),
         }
     }
 
@@ -78,8 +78,18 @@ impl Engine {
             if !game_res {
                 break;
             }
-        }
 
+            let empty_cmd_buffer = renderer::RenderCommandBuffer::default();
+            self.render_system.borrow_mut().render(empty_cmd_buffer);
+        }
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        let mut game = self.game.borrow_mut();
         game.on_shutdown();
+
+        self.render_system.borrow_mut().destroy();
     }
 }

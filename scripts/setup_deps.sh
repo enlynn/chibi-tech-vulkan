@@ -2,7 +2,7 @@
 
 # Fetch and build GLFW
 #
-glfw_bin="vendor/glfw/3.4/bin"
+glfw_bin="engine/vendor/glfw/3.4/bin"
 glfw_url=https://github.com/glfw/glfw/
 glfw_tag=3.4
 

@@ -18,6 +18,7 @@
 //#define VMA_IMPLEMENTATION
 
 #include "1.3.296/vulkan/vulkan.h"
-//#include "1.3.296/vma/vk_mem_alloc.h"
+#include "1.3.296/vma/vk_mem_alloc.h"
+
 
 #endif//_VULKAN_WRAPPER_H_

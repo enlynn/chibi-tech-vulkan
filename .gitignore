@@ -1,2 +1,4 @@
 /target
 engine/vendor/glfw/3.4/bin/*
+engine/vendor/vulkan/*.a
+engine/vendor/vulkan/*.o

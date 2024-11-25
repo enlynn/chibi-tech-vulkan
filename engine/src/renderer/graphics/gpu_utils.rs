@@ -18,7 +18,15 @@ macro_rules! call_throw {
     }};
 }
 
- pub(crate) use call_throw;
+macro_rules! call_nothrow {
+    ($call:expr, $($arg:expr),*) => {{
+        let result = unsafe { ($call)($($arg,)*) };
+        result
+    }};
+}
+
+pub(crate) use call_throw;
+pub(crate) use call_nothrow;
 
 macro_rules! get_vk_procaddr_optional {
     ($call:expr, $obj:expr, $func:ident) => {{
@@ -59,7 +67,7 @@ pub struct GlobalFnTable {
     dll: os::DllLibrary,
 
     pub create_instance:                     FN_vkCreateInstance,
-    get_inst_procaddr:                       FN_vkGetInstanceProcAddr,
+    pub get_inst_procaddr:                   FN_vkGetInstanceProcAddr,
     enumerate_instance_extension_properties: FN_vkEnumerateInstanceExtensionProperties,
     enumerate_instance_layer_properties:     FN_vkEnumerateInstanceLayerProperties,
 }
@@ -102,6 +110,7 @@ impl GlobalFnTable {
 
 pub struct InstanceFnTable
 {
+    pub(crate) get_device_procaddr:          FN_vkGetDeviceProcAddr,
     pub(crate) create_device:                FN_vkCreateDevice,
     pub(crate) destroy_instance:             FN_vkDestroyInstance,
     pub(crate) destroy_surface:              FN_vkDestroySurfaceKHR,
@@ -110,11 +119,13 @@ pub struct InstanceFnTable
     enum_physical_devices:                   FN_vkEnumeratePhysicalDevices,
 
     pub(crate) get_gpu_memory_properties:    FN_vkGetPhysicalDeviceMemoryProperties,
+    pub(crate) get_gpu_memory_properties2:   FN_vkGetPhysicalDeviceMemoryProperties2,
     pub(crate) get_gpu_properties:           FN_vkGetPhysicalDeviceProperties,
     pub(crate) get_gpu_features:             FN_vkGetPhysicalDeviceFeatures,
 
     pub(crate) get_gpu_surface_capabilities: FN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
     pub(crate) get_gpu_surface_support:      FN_vkGetPhysicalDeviceSurfaceSupportKHR,
+    pub(crate) get_gpu_format_properties:    FN_vkGetPhysicalDeviceFormatProperties,
 
     get_gpu_surface_formats:                 FN_vkGetPhysicalDeviceSurfaceFormatsKHR,
     get_gpu_queue_family_properties:         FN_vkGetPhysicalDeviceQueueFamilyProperties,
@@ -211,58 +222,73 @@ impl InstanceFnTable {
 
 pub struct DeviceFnTable
 {
-    acquire_next_image:           FN_vkAcquireNextImageKHR,
-    alloc_command_buffers:        FN_vkAllocateCommandBuffers,
-    alloc_descriptor_sets:        FN_vkAllocateDescriptorSets,
-    alloc_memory:                 FN_vkAllocateMemory,
-    begin_command_buffer:         FN_vkBeginCommandBuffer,
-    bind_buffer_memory:           FN_vkBindBufferMemory,
-    cmd_begin_render_pass:        FN_vkCmdBeginRenderPass,
-    cmd_copy_buffer:              FN_vkCmdCopyBuffer,
-    cmd_end_render_pass:          FN_vkCmdEndRenderPass,
-    cmd_pipeline_barrier:         FN_vkCmdPipelineBarrier,
-    create_buffer:                FN_vkCreateBuffer,
-    create_command_pool:          FN_vkCreateCommandPool,
-    create_descriptor_pool:       FN_vkCreateDescriptorPool,
-    create_descriptor_set_layout: FN_vkCreateDescriptorSetLayout,
-    create_image:                 FN_vkCreateImage,
-    create_image_view:            FN_vkCreateImageView,
-    create_fence:                 FN_vkCreateFence,
-    create_framebuffer:           FN_vkCreateFramebuffer,
-    create_pipeline_cache:        FN_vkCreatePipelineCache,
-    create_pipeline_layout:       FN_vkCreatePipelineLayout,
-    create_render_pass:           FN_vkCreateRenderPass,
-    create_sampler:               FN_vkCreateSampler,
-    create_semaphore:             FN_vkCreateSemaphore,
-    create_shader_module:         FN_vkCreateShaderModule,
-    create_swapchain:             FN_vkCreateSwapchainKHR,
-    destroy_buffer:               FN_vkDestroyBuffer,
-    destroy_command_pool:         FN_vkDestroyCommandPool,
-    destroy_device:               FN_vkDestroyDevice,
-    destroy_fence:                FN_vkDestroyFence,
-    destroy_framebuffer:          FN_vkDestroyFramebuffer,
-    destroy_image:                FN_vkDestroyImage,
-    destroy_image_view:           FN_vkDestroyImageView,
-    destroy_semaphore:            FN_vkDestroySemaphore,
-    destroy_render_pass:          FN_vkDestroyRenderPass,
-    destroy_swapchain:            FN_vkDestroySwapchainKHR,
-    wait_idle:                    FN_vkDeviceWaitIdle,
-    end_command_buffer:           FN_vkEndCommandBuffer,
-    flush_mapped_memory_ranges:   FN_vkFlushMappedMemoryRanges,
-    free_command_buffers:         FN_vkFreeCommandBuffers,
-    free_memory:                  FN_vkFreeMemory,
-    get_buffer_memory_reqs:       FN_vkGetBufferMemoryRequirements,
-    get_queue:                    FN_vkGetDeviceQueue,
-    get_swapchain_images:         FN_vkGetSwapchainImagesKHR,
-    map_memory:                   FN_vkMapMemory,
-    queue_present:                FN_vkQueuePresentKHR,
-    queue_submit:                 FN_vkQueueSubmit,
-    reset_command_buffer:         FN_vkResetCommandBuffer,
-    reset_command_pool:           FN_vkResetCommandPool,
-    reset_fences:                 FN_vkResetFences,
-    unmap_memory:                 FN_vkUnmapMemory,
-    update_descriptor_sets:       FN_vkUpdateDescriptorSets,
-    wait_for_fences:              FN_vkWaitForFences,
+    pub acquire_next_image:           FN_vkAcquireNextImageKHR,
+    pub alloc_command_buffers:        FN_vkAllocateCommandBuffers,
+    pub alloc_descriptor_sets:        FN_vkAllocateDescriptorSets,
+    pub alloc_memory:                 FN_vkAllocateMemory,
+    pub begin_command_buffer:         FN_vkBeginCommandBuffer,
+    pub bind_buffer_memory:           FN_vkBindBufferMemory,
+    pub cmd_begin_render_pass:        FN_vkCmdBeginRenderPass,
+    pub cmd_copy_buffer:              FN_vkCmdCopyBuffer,
+    pub cmd_end_render_pass:          FN_vkCmdEndRenderPass,
+    pub cmd_pipeline_barrier:         FN_vkCmdPipelineBarrier,
+    pub create_buffer:                FN_vkCreateBuffer,
+    pub create_command_pool:          FN_vkCreateCommandPool,
+    pub create_descriptor_pool:       FN_vkCreateDescriptorPool,
+    pub create_descriptor_set_layout: FN_vkCreateDescriptorSetLayout,
+    pub create_image:                 FN_vkCreateImage,
+    pub create_image_view:            FN_vkCreateImageView,
+    pub create_fence:                 FN_vkCreateFence,
+    pub create_framebuffer:           FN_vkCreateFramebuffer,
+    pub create_pipeline_cache:        FN_vkCreatePipelineCache,
+    pub create_pipeline_layout:       FN_vkCreatePipelineLayout,
+    pub create_render_pass:           FN_vkCreateRenderPass,
+    pub create_sampler:               FN_vkCreateSampler,
+    pub create_semaphore:             FN_vkCreateSemaphore,
+    pub create_shader_module:         FN_vkCreateShaderModule,
+    pub create_swapchain:             FN_vkCreateSwapchainKHR,
+    pub destroy_buffer:               FN_vkDestroyBuffer,
+    pub destroy_command_pool:         FN_vkDestroyCommandPool,
+    pub destroy_device:               FN_vkDestroyDevice,
+    pub destroy_fence:                FN_vkDestroyFence,
+    pub destroy_framebuffer:          FN_vkDestroyFramebuffer,
+    pub destroy_image:                FN_vkDestroyImage,
+    pub destroy_image_view:           FN_vkDestroyImageView,
+    pub destroy_semaphore:            FN_vkDestroySemaphore,
+    pub destroy_render_pass:          FN_vkDestroyRenderPass,
+    pub destroy_swapchain:            FN_vkDestroySwapchainKHR,
+    pub wait_idle:                    FN_vkDeviceWaitIdle,
+    pub end_command_buffer:           FN_vkEndCommandBuffer,
+    pub flush_mapped_memory_ranges:   FN_vkFlushMappedMemoryRanges,
+    pub free_command_buffers:         FN_vkFreeCommandBuffers,
+    pub free_memory:                  FN_vkFreeMemory,
+    pub get_buffer_memory_reqs:       FN_vkGetBufferMemoryRequirements,
+    pub get_queue:                    FN_vkGetDeviceQueue,
+    pub get_swapchain_images:         FN_vkGetSwapchainImagesKHR,
+    pub map_memory:                   FN_vkMapMemory,
+    pub queue_present:                FN_vkQueuePresentKHR,
+    pub queue_submit:                 FN_vkQueueSubmit,
+    pub queue_submit2:                FN_vkQueueSubmit2,
+    pub reset_command_buffer:         FN_vkResetCommandBuffer,
+    pub reset_command_pool:           FN_vkResetCommandPool,
+    pub reset_fences:                 FN_vkResetFences,
+    pub unmap_memory:                 FN_vkUnmapMemory,
+    pub update_descriptor_sets:       FN_vkUpdateDescriptorSets,
+    pub wait_for_fences:              FN_vkWaitForFences,
+
+    pub invalidate_mapped_memory_ranges: FN_vkInvalidateMappedMemoryRanges,
+    pub bind_image_memory:               FN_vkBindImageMemory,
+    pub get_image_memory_reqs:           FN_vkGetImageMemoryRequirements,
+    pub get_buffer_memory_reqs2:         FN_vkGetBufferMemoryRequirements2,
+    pub get_image_memory_reqs2:          FN_vkGetImageMemoryRequirements2,
+    pub bind_buffer_memory2:             FN_vkBindBufferMemory2,
+    pub bind_image_memory2:              FN_vkBindImageMemory2,
+    pub get_device_buffer_memory_reqs:   FN_vkGetDeviceBufferMemoryRequirements,
+    pub get_device_image_memory_reqs:    FN_vkGetDeviceImageMemoryRequirements,
+
+    pub cmd_pipeline_barrier2:           FN_vkCmdPipelineBarrier2,
+    pub cmd_clear_color_image:           FN_vkCmdClearColorImage,
+    pub cmd_blit_image2:                 FN_vkCmdBlitImage2,
 }
 
 /* ======================================================================== */
@@ -335,13 +361,17 @@ pub fn load_instance_functions(gbl: &GlobalFnTable, inst: VkInstance) -> Result<
         None
     };
 
+    let get_device_procaddr: FN_vkGetDeviceProcAddr = get_vk_procaddr!(gbl.get_inst_procaddr, inst, vkGetDeviceProcAddr);
+
     let funcs = InstanceFnTable {
+        get_device_procaddr,
         create_device:                   get_inst_procaddr!(inst, vkCreateDevice),
         destroy_instance:                get_inst_procaddr!(inst, vkDestroyInstance),
         destroy_surface:                 get_inst_procaddr!(inst, vkDestroySurfaceKHR),
         enum_gpu_ext_props:              get_inst_procaddr!(inst, vkEnumerateDeviceExtensionProperties),
         enum_physical_devices:           get_inst_procaddr!(inst, vkEnumeratePhysicalDevices),
         get_gpu_memory_properties:       get_inst_procaddr!(inst, vkGetPhysicalDeviceMemoryProperties),
+        get_gpu_memory_properties2:      get_inst_procaddr!(inst, vkGetPhysicalDeviceMemoryProperties2),
         get_gpu_properties:              get_inst_procaddr!(inst, vkGetPhysicalDeviceProperties),
         get_gpu_features:                get_inst_procaddr!(inst, vkGetPhysicalDeviceFeatures),
         get_gpu_queue_family_properties: get_inst_procaddr!(inst, vkGetPhysicalDeviceQueueFamilyProperties),
@@ -349,6 +379,7 @@ pub fn load_instance_functions(gbl: &GlobalFnTable, inst: VkInstance) -> Result<
         get_gpu_surface_capabilities:    get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceCapabilitiesKHR),
         get_gpu_surface_formats:         get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceFormatsKHR),
         get_gpu_surface_support:         get_inst_procaddr!(inst, vkGetPhysicalDeviceSurfaceSupportKHR),
+        get_gpu_format_properties:       get_inst_procaddr!(inst, vkGetPhysicalDeviceFormatProperties),
         #[cfg(target_os = "linux")]
         create_wayland_surface:     get_inst_procaddr_optional!(inst, vkCreateWaylandSurfaceKHR),
         #[cfg(target_os = "linux")]
@@ -422,13 +453,163 @@ pub fn load_device_functions(gbl: &GlobalFnTable, inst: VkInstance, device: VkDe
         map_memory:                   get_device_procaddr!(vkMapMemory),
         queue_present:                get_device_procaddr!(vkQueuePresentKHR),
         queue_submit:                 get_device_procaddr!(vkQueueSubmit),
+        queue_submit2:                get_device_procaddr!(vkQueueSubmit2),
         reset_command_buffer:         get_device_procaddr!(vkResetCommandBuffer),
         reset_command_pool:           get_device_procaddr!(vkResetCommandPool),
         reset_fences:                 get_device_procaddr!(vkResetFences),
         unmap_memory:                 get_device_procaddr!(vkUnmapMemory),
         update_descriptor_sets:       get_device_procaddr!(vkUpdateDescriptorSets),
         wait_for_fences:              get_device_procaddr!(vkWaitForFences),
+
+        invalidate_mapped_memory_ranges: get_device_procaddr!(vkInvalidateMappedMemoryRanges),
+        bind_image_memory:               get_device_procaddr!(vkBindImageMemory),
+        get_image_memory_reqs:           get_device_procaddr!(vkGetImageMemoryRequirements),
+        get_buffer_memory_reqs2:         get_device_procaddr!(vkGetBufferMemoryRequirements2),
+        get_image_memory_reqs2:          get_device_procaddr!(vkGetImageMemoryRequirements2),
+        bind_buffer_memory2:             get_device_procaddr!(vkBindBufferMemory2),
+        bind_image_memory2:              get_device_procaddr!(vkBindImageMemory2),
+        get_device_buffer_memory_reqs:   get_device_procaddr!(vkGetDeviceBufferMemoryRequirements),
+        get_device_image_memory_reqs:    get_device_procaddr!(vkGetDeviceImageMemoryRequirements),
+
+        cmd_pipeline_barrier2:           get_device_procaddr!(vkCmdPipelineBarrier2),
+        cmd_clear_color_image:           get_device_procaddr!(vkCmdClearColorImage),
+        cmd_blit_image2:                 get_device_procaddr!(vkCmdBlitImage2),
     };
 
     Ok(funcs)
+}
+
+/* ======================================================================== */
+/* Helper Types                                                             */
+
+pub enum QueueType {
+    Present,
+    Graphics,
+    Compute,
+    Transfer,
+}
+
+/* ======================================================================== */
+/* Helper Functions                                                         */
+
+#[inline(always)]
+pub fn make_command_buffer_begin_info(usage_flags: VkCommandBufferUsageFlags) -> VkCommandBufferBeginInfo {
+    return VkCommandBufferBeginInfo{
+        sType:            VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        pNext:            ptr::null(),
+        flags:            usage_flags,
+        pInheritanceInfo: ptr::null(),
+    };
+}
+
+#[inline(always)]
+pub fn make_image_subresource_range(aspect_mask: VkImageAspectFlags) -> VkImageSubresourceRange {
+    return VkImageSubresourceRange{
+        aspectMask:     aspect_mask,
+        baseMipLevel:   0,
+        levelCount:     VK_REMAINING_MIP_LEVELS as u32,
+        baseArrayLayer: 0,
+        layerCount:     VK_REMAINING_ARRAY_LAYERS as u32,
+    };
+}
+
+#[inline(always)]
+pub fn make_semaphore_submit_info(stage_mask: VkPipelineStageFlags2, semaphore: VkSemaphore) -> VkSemaphoreSubmitInfo {
+    return VkSemaphoreSubmitInfo{
+        sType:       VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        pNext:       ptr::null(),
+        semaphore,
+        value:       1,
+        stageMask:   stage_mask,
+        deviceIndex: 0,
+    };
+}
+
+#[inline(always)]
+pub fn make_command_buffer_submit_info(cmd_buffer: VkCommandBuffer) -> VkCommandBufferSubmitInfo
+{
+    return VkCommandBufferSubmitInfo{
+        sType:         VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        pNext:         ptr::null(),
+        commandBuffer: cmd_buffer,
+        deviceMask:    0,
+    };
+}
+
+#[inline(always)]
+pub fn make_submit_info(
+    cmd_buffer_submit_info: VkCommandBufferSubmitInfo,
+    signal_semaphore_info:  Option<VkSemaphoreSubmitInfo>,
+    wait_semaphore_info:    Option<VkSemaphoreSubmitInfo>) -> VkSubmitInfo2
+{
+    let p_wait_info = if let Some(wait) = wait_semaphore_info {
+        &wait
+    } else {
+        ptr::null()
+    };
+
+    let p_signal_info = if let Some(signal) = signal_semaphore_info {
+        &signal
+    } else {
+        ptr::null()
+    };
+
+    return VkSubmitInfo2{
+        sType:                    VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        pNext:                    ptr::null(),
+        flags:                    0,
+        waitSemaphoreInfoCount:   if wait_semaphore_info.is_some() { 1 } else { 0 },
+        pWaitSemaphoreInfos:      p_wait_info,
+        commandBufferInfoCount:   1,
+        pCommandBufferInfos:      &cmd_buffer_submit_info,
+        signalSemaphoreInfoCount: if signal_semaphore_info.is_some() { 1 } else { 0 },
+        pSignalSemaphoreInfos:    p_signal_info,
+    };
+}
+
+#[inline(always)]
+pub fn make_image_ci(format: VkFormat, usage_flags: VkImageUsageFlags, extent: VkExtent3D) -> VkImageCreateInfo
+{
+    VkImageCreateInfo{
+        sType:                 VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        pNext:                 ptr::null(),
+        imageType:             VK_IMAGE_TYPE_2D,
+        format,
+        extent,
+        mipLevels:             1, //TODO: this should be configurable
+        arrayLayers:           1,
+        samples:               VK_SAMPLE_COUNT_1_BIT,   //for MSAA. not using it by default, so default it to 1 sample per pixel.
+        tiling:                VK_IMAGE_TILING_OPTIMAL, //optimal tiling, so image is stored on the best gpu format
+        usage:                 usage_flags,
+        flags:                 0,
+        sharingMode:           VK_SHARING_MODE_EXCLUSIVE,
+        queueFamilyIndexCount: 0,
+        pQueueFamilyIndices:   ptr::null(),
+        initialLayout:         VK_IMAGE_LAYOUT_UNDEFINED,
+    }
+
+    // Tiling
+    //   - If we want to read the image data from cpu, we would need to use tiling LINEAR (simple 2D array)
+}
+
+#[inline(always)]
+pub fn make_image_view_ci(format: VkFormat, image: VkImage, aspect_flags: VkImageAspectFlags) -> VkImageViewCreateInfo
+{
+    // build an image-view for the depth image to use for rendering
+    return VkImageViewCreateInfo{
+        sType:            VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        pNext:            ptr::null(),
+        flags:            0,
+                          image,
+        viewType:         VK_IMAGE_VIEW_TYPE_2D,
+                          format,
+        components:       VkComponentMapping::default(),
+        subresourceRange: VkImageSubresourceRange{
+            aspectMask:     aspect_flags,
+            baseMipLevel:   0,
+            levelCount:     1,
+            baseArrayLayer: 0,
+            layerCount:     1,
+        },
+    };
 }
