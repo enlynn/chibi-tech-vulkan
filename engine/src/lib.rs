@@ -49,12 +49,6 @@ Thoughts and expectations on performance:
 
 */
 
-/*
-
-A few thoughts on Lifetimes:
-
-*/
-
 pub const ENGINE_VERSION_MAJOR: u32 = 0;
 pub const ENGINE_VERSION_MINOR: u32 = 0;
 pub const ENGINE_VERSION_PATCH: u32 = 1;

@@ -416,3 +416,13 @@ impl Default for VkOffset3D {
         }
     }
 }
+
+impl Default for VkDescriptorImageInfo {
+    fn default() -> Self {
+        Self{
+            sampler:     ptr::null_mut(),
+            imageView:   ptr::null_mut(),
+            imageLayout: VK_IMAGE_LAYOUT_UNDEFINED,
+        }
+    }
+}

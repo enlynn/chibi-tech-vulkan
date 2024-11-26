@@ -1,14 +1,15 @@
 use crate::util::ffi::*;
 use crate::window::NativeSurface;
 
-use super::api;
+use super::api::*;
 use super::consts;
 use super::gpu_device_context as context;
 use super::gpu_swapchain::{Swapchain, SwapchainFnTable};
 use super::gpu_utils as util;
-use super::gpu_utils::call_throw;
+use super::gpu_utils::{call_throw, call_nothrow};
 use super::gpu_command_pool::{CommandPool, CommandPoolFnTable};
 use super::gpu_command_buffer::{CommandBuffer, CommandBufferFnTable};
+use super::gpu_descriptors::*;
 
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
@@ -45,7 +46,7 @@ pub struct Instance {
     // Vulkan-Loaded functions
     glb_fns:              util::GlobalFnTable,
     inst_fns:             util::InstanceFnTable,
-    handle:               api::VkInstance,
+    handle:               VkInstance,
     // meta information about the VkInstance
     requested_layers:     Vec<CString>,
     requested_extensions: Vec<CString>,
@@ -65,21 +66,21 @@ pub struct GpuQueueFamilies {
 
 #[derive(Default)]
 pub struct SwapchainSupportInfo {
-    capabilities:  api::VkSurfaceCapabilitiesKHR,
-    formats:       Vec<api::VkSurfaceFormatKHR>,
-    present_modes: Vec<api::VkPresentModeKHR>,
+    capabilities:  VkSurfaceCapabilitiesKHR,
+    formats:       Vec<VkSurfaceFormatKHR>,
+    present_modes: Vec<VkPresentModeKHR>,
 }
 
 struct GpuFnTable {
-    pub get_gpu_format_properties: api::FN_vkGetPhysicalDeviceFormatProperties,
+    pub get_gpu_format_properties: FN_vkGetPhysicalDeviceFormatProperties,
 }
 
 pub struct Gpu {
     fns:                                    GpuFnTable,
-    pub handle:                             api::VkPhysicalDevice,
-    pub properties:                         api::VkPhysicalDeviceProperties,
-    pub features:                           api::VkPhysicalDeviceFeatures,
-    pub memory_properties:                  api::VkPhysicalDeviceMemoryProperties,
+    pub handle:                             VkPhysicalDevice,
+    pub properties:                         VkPhysicalDeviceProperties,
+    pub features:                           VkPhysicalDeviceFeatures,
+    pub memory_properties:                  VkPhysicalDeviceMemoryProperties,
     pub queue_infos:                        GpuQueueFamilies,
     pub swapchain_support_info:             SwapchainSupportInfo,
     pub supports_device_local_host_visible: bool,
@@ -90,13 +91,13 @@ pub struct Display {
 }
 
 pub struct Surface {
-    handle: api::VkSurfaceKHR,
+    handle: VkSurfaceKHR,
 }
 
 pub struct Device {
     pub fns:      util::DeviceFnTable,
-    pub handle:   api::VkDevice,
-    allocator: api::VmaAllocator,
+    pub handle:   VkDevice,
+    allocator: VmaAllocator,
 
     instance: Instance,
     surface:  Surface,
@@ -107,22 +108,22 @@ pub struct Device {
 }
 
 unsafe extern "C" fn debug_callback(
-    severity: api::VkDebugUtilsMessageSeverityFlagBitsEXT,
-    _message_type: api::VkDebugUtilsMessageTypeFlagsEXT,
-    data: *const api::VkDebugUtilsMessengerCallbackDataEXT,
+    severity: VkDebugUtilsMessageSeverityFlagBitsEXT,
+    _message_type: VkDebugUtilsMessageTypeFlagsEXT,
+    data: *const VkDebugUtilsMessengerCallbackDataEXT,
     _: *mut std::os::raw::c_void,
-) -> api::VkBool32 {
-    if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0 {
+) -> VkBool32 {
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) != 0 {
         println!("[VERBOSE]: {:?}", CStr::from_ptr((*data).pMessage));
-    } else if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0 {
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) != 0 {
         println!("[INFO]: {:?}", CStr::from_ptr((*data).pMessage));
-    } else if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0 {
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0 {
         println!("[WARNING]: {:?}", CStr::from_ptr((*data).pMessage));
-    } else if (severity & api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0 {
+    } else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0 {
         println!("[ERROR]: {:?}", CStr::from_ptr((*data).pMessage));
     }
 
-    api::VK_FALSE
+    VK_FALSE
 }
 
 impl Instance {
@@ -163,14 +164,14 @@ impl Instance {
         // Populate the debug messenger info, we'll load the function once VkInstance has been created.
         //
 
-        let severities = api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
-            | api::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        let severities = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
-        let message_types = api::VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
-            | api::VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
-            | api::VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+        let message_types = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+            | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
 
-        let mut debug_messenger_ci = api::VkDebugUtilsMessengerCreateInfoEXT::default();
+        let mut debug_messenger_ci = VkDebugUtilsMessengerCreateInfoEXT::default();
         debug_messenger_ci.messageSeverity = severities;
         debug_messenger_ci.messageType     = message_types;
         debug_messenger_ci.pfnUserCallback = Some(debug_callback);
@@ -201,8 +202,8 @@ impl Instance {
         let platform_surface_ext = if cfg!(target_os = "linux") {
             if let Ok(session_type) = std::env::var("XDG_SESSION_TYPE") {
                 match session_type.as_str() {
-                    "x11"     => byte_array_as_cstr!(api::VK_KHR_XLIB_SURFACE_EXTENSION_NAME),
-                    "wayland" => byte_array_as_cstr!(api::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME),
+                    "x11"     => byte_array_as_cstr!(VK_KHR_XLIB_SURFACE_EXTENSION_NAME),
+                    "wayland" => byte_array_as_cstr!(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME),
                     _         => return Err("Unsupported window manager".to_string()),
                 }
             } else {
@@ -216,14 +217,14 @@ impl Instance {
         for extension in available_extensions.iter() {
             let ext_c_str = char_array_as_cstr!(extension.extensionName);
 
-            if ext_c_str == byte_array_as_cstr!(api::VK_KHR_SURFACE_EXTENSION_NAME) {
+            if ext_c_str == byte_array_as_cstr!(VK_KHR_SURFACE_EXTENSION_NAME) {
                 let string: CString = ext_c_str.into();
 
                 instance_exts.push(string.as_ptr());
                 instance_ext_strings.push(string);
 
                 surface_ext_found = true;
-            } else if ext_c_str == byte_array_as_cstr!(api::VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
+            } else if ext_c_str == byte_array_as_cstr!(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
                 let string: CString = ext_c_str.into();
 
                 instance_exts.push(string.as_ptr());
@@ -238,7 +239,7 @@ impl Instance {
 
                 platform_surface_ext_found = true;
             } else if consts::ENABLE_DEBUG_LAYER {
-                if ext_c_str == byte_array_as_cstr!(api::VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
+                if ext_c_str == byte_array_as_cstr!(VK_EXT_DEBUG_UTILS_EXTENSION_NAME) {
                     let string: CString = ext_c_str.into();
 
                     instance_exts.push(string.as_ptr());
@@ -265,14 +266,14 @@ impl Instance {
         let software_name = CString::new(software_name).unwrap();
         let engine_name   = CString::new("ChibiTech").unwrap();
 
-        let mut app_info = api::VkApplicationInfo::default();
+        let mut app_info = VkApplicationInfo::default();
         app_info.pEngineName        = engine_name.as_ptr();
         app_info.engineVersion      = crate::ENGINE_VERSION;
         app_info.pApplicationName   = software_name.as_ptr();
         app_info.applicationVersion = software_version;
         //api version is 1.3 by default
 
-        let mut instance_ci = api::VkInstanceCreateInfo::default();
+        let mut instance_ci = VkInstanceCreateInfo::default();
         instance_ci.pNext                   = p_next;
         instance_ci.pApplicationInfo        = &app_info as *const _;
         instance_ci.enabledLayerCount       = instance_layers.len() as u32;
@@ -280,7 +281,7 @@ impl Instance {
         instance_ci.enabledExtensionCount   = instance_exts.len() as u32;
         instance_ci.ppEnabledExtensionNames = instance_exts.as_ptr();
 
-        let mut instance: api::VkInstance = std::ptr::null_mut();
+        let mut instance: VkInstance = std::ptr::null_mut();
         util::call_throw!(
             global_fns.create_instance,
             &instance_ci as *const _,
@@ -300,9 +301,9 @@ impl Instance {
         //
 
         let debug_messenger = if consts::ENABLE_DEBUG_LAYER {
-            let mut ptr: api::VkDebugUtilsMessengerEXT = std::ptr::null_mut();
+            let mut ptr: VkDebugUtilsMessengerEXT = std::ptr::null_mut();
 
-            let mut result: i32 = api::VK_SUCCESS;
+            let mut result: i32 = VK_SUCCESS;
             if let Some(create_debug_messenger) = instance_fns.create_debug_messenger {
                 result = call!(
                     create_debug_messenger,
@@ -340,15 +341,15 @@ impl Surface {
     pub fn new(instance: &Instance, native_surface: NativeSurface) -> Result<Surface, String> {
         let result = if cfg!(target_os = "linux") {
             if let NativeSurface::Wayland(native) = native_surface {
-                let info = api::VkWaylandSurfaceCreateInfoKHR {
-                    sType: api::VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+                let info = VkWaylandSurfaceCreateInfoKHR {
+                    sType: VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
                     pNext: std::ptr::null(),
                     flags: 0,
-                    display: native.display as *mut api::wl_display,
-                    surface: native.surface as *mut api::wl_surface,
+                    display: native.display as *mut wl_display,
+                    surface: native.surface as *mut wl_surface,
                 };
 
-                let mut surf: MaybeUninit<_> = MaybeUninit::<api::VkSurfaceKHR>::uninit();
+                let mut surf: MaybeUninit<_> = MaybeUninit::<VkSurfaceKHR>::uninit();
                 util::call_throw!(
                     instance.inst_fns.create_wayland_surface.unwrap(),
                     instance.handle,
@@ -360,15 +361,15 @@ impl Surface {
                     handle: unsafe { surf.assume_init() },
                 })
             } else if let NativeSurface::X11(native) = native_surface {
-                let info = api::VkXlibSurfaceCreateInfoKHR {
-                    sType: api::VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+                let info = VkXlibSurfaceCreateInfoKHR {
+                    sType: VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
                     pNext: std::ptr::null(),
                     flags: 0,
-                    dpy: native.display as *mut api::Display,
-                    window: native.window as api::Window,
+                    dpy:    native.display as *mut super::api::Display,
+                    window: native.window  as Window,
                 };
 
-                let mut surf = MaybeUninit::<api::VkSurfaceKHR>::uninit();
+                let mut surf = MaybeUninit::<VkSurfaceKHR>::uninit();
                 util::call_throw!(
                     instance.inst_fns.create_xlib_surface.unwrap(),
                     instance.handle,
@@ -394,7 +395,7 @@ impl Gpu {
     fn get_queue_families(
         instance: &Instance,
         surface: &Surface,
-        gpu: api::VkPhysicalDevice,
+        gpu: VkPhysicalDevice,
     ) -> GpuQueueFamilies {
         let mut result = GpuQueueFamilies::default();
 
@@ -408,19 +409,19 @@ impl Gpu {
             let mut current_transfer_score: u8 = 0;
 
             // Graphics queue?
-            if (property.queueFlags & api::VK_QUEUE_GRAPHICS_BIT) != 0 {
+            if (property.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 {
                 result.graphics = Some(queue_family_index);
                 current_transfer_score += 1;
             }
 
             // Compute queue?
-            if (property.queueFlags & api::VK_QUEUE_COMPUTE_BIT) != 0 {
+            if (property.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 {
                 result.compute = Some(queue_family_index);
                 current_transfer_score += 1;
             }
 
             // Does this queue family support the present queue? If so, yoink it.
-            let mut supports_present: api::VkBool32 = api::VK_FALSE;
+            let mut supports_present: VkBool32 = VK_FALSE;
             util::call_throw!(
                 instance.inst_fns.get_gpu_surface_support,
                 gpu,
@@ -429,7 +430,7 @@ impl Gpu {
                 &mut supports_present
             );
 
-            if supports_present == api::VK_TRUE {
+            if supports_present == VK_TRUE {
                 result.present = Some(queue_family_index);
             }
 
@@ -442,10 +443,10 @@ impl Gpu {
     pub fn query_swapchain_capabilities(
         instance: &Instance,
         surface:  &Surface,
-        gpu:       api::VkPhysicalDevice,
+        gpu:       VkPhysicalDevice,
     ) -> SwapchainSupportInfo {
         // Surface capabilities
-        let mut capabilities_unsafe = MaybeUninit::<api::VkSurfaceCapabilitiesKHR>::uninit();
+        let mut capabilities_unsafe = MaybeUninit::<VkSurfaceCapabilitiesKHR>::uninit();
         util::call_throw!(
             instance.inst_fns.get_gpu_surface_capabilities,
             gpu,
@@ -473,8 +474,8 @@ impl Gpu {
     fn does_gpu_meet_requirements(
         instance:     &Instance,
         surface:      &Surface,
-        gpu:           api::VkPhysicalDevice,
-        gpu_features: &api::VkPhysicalDeviceFeatures,
+        gpu:           VkPhysicalDevice,
+        gpu_features: &VkPhysicalDeviceFeatures,
     ) -> bool {
         let queue_families = Self::get_queue_families(instance, surface, gpu);
 
@@ -496,7 +497,7 @@ impl Gpu {
 
         // Check for sampler anisotropy
         const REQUIRE_ANISOTROPY: bool = true;
-        if REQUIRE_ANISOTROPY && gpu_features.samplerAnisotropy != api::VK_TRUE {
+        if REQUIRE_ANISOTROPY && gpu_features.samplerAnisotropy != VK_TRUE {
             println!("Requested anisotropy, but not found.");
             return false;
         }
@@ -509,10 +510,10 @@ impl Gpu {
         for extension in extensions {
             let ext_c_str = char_array_as_cstr!(extension.extensionName);
 
-            if ext_c_str == byte_array_as_cstr!(api::VK_KHR_SWAPCHAIN_EXTENSION_NAME) {
+            if ext_c_str == byte_array_as_cstr!(VK_KHR_SWAPCHAIN_EXTENSION_NAME) {
                 swapchain_extension_found = true;
             } else if ext_c_str
-                == byte_array_as_cstr!(api::VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME)
+                == byte_array_as_cstr!(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME)
             {
                 semaphore_timelines_found = true;
             }
@@ -532,21 +533,21 @@ impl Gpu {
 
         let vk_gpus = instance.inst_fns.enumerate_gpus(instance.handle);
         for gpu in vk_gpus.into_iter() {
-            let mut properties_unsafe = MaybeUninit::<api::VkPhysicalDeviceProperties>::uninit();
+            let mut properties_unsafe = MaybeUninit::<VkPhysicalDeviceProperties>::uninit();
             call!(
                 instance.inst_fns.get_gpu_properties,
                 gpu,
                 properties_unsafe.as_mut_ptr()
             );
 
-            let mut features_unsafe = MaybeUninit::<api::VkPhysicalDeviceFeatures>::uninit();
+            let mut features_unsafe = MaybeUninit::<VkPhysicalDeviceFeatures>::uninit();
             call!(
                 instance.inst_fns.get_gpu_features,
                 gpu,
                 features_unsafe.as_mut_ptr()
             );
 
-            let mut memory_unsafe = MaybeUninit::<api::VkPhysicalDeviceMemoryProperties>::uninit();
+            let mut memory_unsafe = MaybeUninit::<VkPhysicalDeviceMemoryProperties>::uninit();
             call!(
                 instance.inst_fns.get_gpu_memory_properties,
                 gpu,
@@ -562,10 +563,10 @@ impl Gpu {
             let mut supports_device_local_host_visible = false;
             for i in 0..memory.memoryTypeCount {
                 let has_host_visible = (memory.memoryTypes[i as usize].propertyFlags
-                    & api::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                    & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
                     != 0;
                 let has_device_local = (memory.memoryTypes[i as usize].propertyFlags
-                    & api::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                    & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
                     != 0;
                 if has_host_visible && has_device_local {
                     supports_device_local_host_visible = true;
@@ -609,8 +610,8 @@ impl Gpu {
         return false;
     }
 
-    pub fn select_surface_format(&self, prefer_hdr: bool) -> api::VkSurfaceFormatKHR {
-        let has_format = |formats: &Vec<api::VkSurfaceFormatKHR>, desired_format: api::VkSurfaceFormatKHR| -> bool {
+    pub fn select_surface_format(&self, prefer_hdr: bool) -> VkSurfaceFormatKHR {
+        let has_format = |formats: &Vec<VkSurfaceFormatKHR>, desired_format: VkSurfaceFormatKHR| -> bool {
             for surface_format in formats {
                 if (surface_format.format == desired_format.format && surface_format.colorSpace == desired_format.colorSpace) {
                     return true;
@@ -620,8 +621,8 @@ impl Gpu {
             return false;
         };
 
-        const SDR_FORMAT: api::VkSurfaceFormatKHR = api::VkSurfaceFormatKHR{ format: api::VK_FORMAT_B8G8R8A8_UNORM, colorSpace: api::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-        const HDR_FORMAT: api::VkSurfaceFormatKHR = api::VkSurfaceFormatKHR{ format: api::VK_FORMAT_UNDEFINED,      colorSpace: api::VK_COLOR_SPACE_MAX_ENUM_KHR       };
+        const SDR_FORMAT: VkSurfaceFormatKHR = VkSurfaceFormatKHR{ format: VK_FORMAT_B8G8R8A8_UNORM, colorSpace: VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+        const HDR_FORMAT: VkSurfaceFormatKHR = VkSurfaceFormatKHR{ format: VK_FORMAT_UNDEFINED,      colorSpace: VK_COLOR_SPACE_MAX_ENUM_KHR       };
 
         if prefer_hdr && has_format(&self.swapchain_support_info.formats, HDR_FORMAT) {
             return HDR_FORMAT;
@@ -637,19 +638,19 @@ impl Gpu {
         return self.swapchain_support_info.formats[0];
     }
 
-    pub fn select_depth_format(&self) -> api::VkFormat {
-        let mut depth_format = api::VK_FORMAT_UNDEFINED;
+    pub fn select_depth_format(&self) -> VkFormat {
+        let mut depth_format = VK_FORMAT_UNDEFINED;
 
-        const DEPTH_CANDIDATES: [api::VkFormat; 3] = [
-            api::VK_FORMAT_D32_SFLOAT,
-            api::VK_FORMAT_D32_SFLOAT_S8_UINT,
-            api::VK_FORMAT_D24_UNORM_S8_UINT
+        const DEPTH_CANDIDATES: [VkFormat; 3] = [
+            VK_FORMAT_D32_SFLOAT,
+            VK_FORMAT_D32_SFLOAT_S8_UINT,
+            VK_FORMAT_D24_UNORM_S8_UINT
         ];
 
-        const DEPTH_FLAGS: u32 = api::VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        const DEPTH_FLAGS: u32 = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
         for candidate in DEPTH_CANDIDATES {
-            let mut format_props_unsafe: MaybeUninit<_> = MaybeUninit::<api::VkFormatProperties>::uninit();
+            let mut format_props_unsafe: MaybeUninit<_> = MaybeUninit::<VkFormatProperties>::uninit();
             call!(self.fns.get_gpu_format_properties, self.handle, candidate, format_props_unsafe.as_mut_ptr());
 
             let format_props = unsafe { format_props_unsafe.assume_init() };
@@ -720,7 +721,7 @@ impl Device {
 
         let queue_priority: f32 = 1.0;
 
-        let mut queue_ci: [api::VkDeviceQueueCreateInfo; MAX_QUEUES] = [api::VkDeviceQueueCreateInfo::default(); MAX_QUEUES];
+        let mut queue_ci: [VkDeviceQueueCreateInfo; MAX_QUEUES] = [VkDeviceQueueCreateInfo::default(); MAX_QUEUES];
         for i in 0..queue_count {
             queue_ci[i as usize].queueFamilyIndex = unique_queues[i as usize];
             queue_ci[i as usize].queueCount = 1;
@@ -733,34 +734,34 @@ impl Device {
         //   - Timeline Semaphores
         use core::ffi::c_void;
 
-        let mut feature_device_addr = api::VkPhysicalDeviceBufferDeviceAddressFeatures::default();
-        feature_device_addr.bufferDeviceAddress = api::VK_TRUE;
+        let mut feature_device_addr = VkPhysicalDeviceBufferDeviceAddressFeatures::default();
+        feature_device_addr.bufferDeviceAddress = VK_TRUE;
 
-        let feature_device_addr_ptr: *mut api::VkPhysicalDeviceBufferDeviceAddressFeatures = &mut feature_device_addr;
+        let feature_device_addr_ptr: *mut VkPhysicalDeviceBufferDeviceAddressFeatures = &mut feature_device_addr;
 
-        let mut feature_sync2 = api::VkPhysicalDeviceSynchronization2Features::default();
-        feature_sync2.synchronization2 = api::VK_TRUE;
+        let mut feature_sync2 = VkPhysicalDeviceSynchronization2Features::default();
+        feature_sync2.synchronization2 = VK_TRUE;
         feature_sync2.pNext = feature_device_addr_ptr as *mut c_void;
 
-        let feature_sync2_ptr: *mut api::VkPhysicalDeviceSynchronization2Features =
+        let feature_sync2_ptr: *mut VkPhysicalDeviceSynchronization2Features =
             &mut feature_sync2;
 
-        let mut feature_timeline = api::VkPhysicalDeviceTimelineSemaphoreFeatures::default();
-        feature_timeline.timelineSemaphore = api::VK_TRUE;
+        let mut feature_timeline = VkPhysicalDeviceTimelineSemaphoreFeatures::default();
+        feature_timeline.timelineSemaphore = VK_TRUE;
         feature_timeline.pNext = feature_sync2_ptr as *mut c_void;
 
-        let feature_timeline_ptr: *mut api::VkPhysicalDeviceTimelineSemaphoreFeatures =
+        let feature_timeline_ptr: *mut VkPhysicalDeviceTimelineSemaphoreFeatures =
             &mut feature_timeline;
 
-        //let enabled_features = api::VkPhysicalDeviceFeatures::default();
+        //let enabled_features = VkPhysicalDeviceFeatures::default();
         // left here in case I want to override the defaults in the future
 
-        let mut enabled_features2 = api::VkPhysicalDeviceFeatures2 {
+        let mut enabled_features2 = VkPhysicalDeviceFeatures2 {
             pNext: feature_timeline_ptr as *mut c_void,
             ..Default::default()
         };
 
-        let enabled_features2_ptr: *mut api::VkPhysicalDeviceFeatures2 = &mut enabled_features2;
+        let enabled_features2_ptr: *mut VkPhysicalDeviceFeatures2 = &mut enabled_features2;
 
         // 3. Build the list of device extensions
 
@@ -768,9 +769,9 @@ impl Device {
         let mut extension_list = Vec::<*const std::os::raw::c_char>::with_capacity(3);
 
         let swapchain_ext_string: CString =
-            byte_array_as_cstr!(api::VK_KHR_SWAPCHAIN_EXTENSION_NAME).into();
+            byte_array_as_cstr!(VK_KHR_SWAPCHAIN_EXTENSION_NAME).into();
         let semaphore_ext_string: CString =
-            byte_array_as_cstr!(api::VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME).into();
+            byte_array_as_cstr!(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME).into();
 
         extension_list.push(swapchain_ext_string.as_ptr());
         extension_list.push(semaphore_ext_string.as_ptr());
@@ -787,14 +788,14 @@ impl Device {
 
         // 4. Create the Device!
 
-        let mut device_ci = api::VkDeviceCreateInfo::default();
+        let mut device_ci = VkDeviceCreateInfo::default();
         device_ci.queueCreateInfoCount = queue_count;
         device_ci.pQueueCreateInfos = queue_ci.as_ptr();
         device_ci.enabledExtensionCount = extension_list.len() as u32;
         device_ci.ppEnabledExtensionNames = extension_list.as_mut_ptr();
         device_ci.pNext = enabled_features2_ptr as *mut c_void;
 
-        let mut device_handle: api::VkDevice = std::ptr::null_mut();
+        let mut device_handle: VkDevice = std::ptr::null_mut();
         call_throw!(
             instance.inst_fns.create_device,
             chosen_gpu.handle,
@@ -813,11 +814,11 @@ impl Device {
         //---------------------------------------------------------------------------------------//
         // Load the Vulkan Memory Allocator
 
-        let vma_flags: api::VmaAllocatorCreateFlags =
-            api::VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT | // app is single threaded at the moment.
-            api::VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+        let vma_flags: VmaAllocatorCreateFlags =
+            VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT | // app is single threaded at the moment.
+            VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
-        let vma_fns = api::VmaVulkanFunctions{
+        let vma_fns = VmaVulkanFunctions{
             vkGetInstanceProcAddr:                   Some(instance.glb_fns.get_inst_procaddr),
             vkGetDeviceProcAddr:                     Some(instance.inst_fns.get_device_procaddr),
             vkGetPhysicalDeviceProperties:           Some(instance.inst_fns.get_gpu_properties),
@@ -846,15 +847,15 @@ impl Device {
             vkGetDeviceImageMemoryRequirements:      Some(device_fns.get_device_image_memory_reqs),
         };
 
-        let mut vma_ci = api::VmaAllocatorCreateInfo::default();
+        let mut vma_ci = VmaAllocatorCreateInfo::default();
         vma_ci.physicalDevice   = chosen_gpu.handle;
         vma_ci.device           = device_handle;
         vma_ci.instance         = instance.handle;
         vma_ci.flags            = vma_flags;
         vma_ci.pVulkanFunctions = &vma_fns;
 
-        let mut vma_allocator: MaybeUninit<_> = MaybeUninit::<api::VmaAllocator>::uninit();
-        call_throw!(api::vmaCreateAllocator, &vma_ci, vma_allocator.as_mut_ptr());
+        let mut vma_allocator: MaybeUninit<_> = MaybeUninit::<VmaAllocator>::uninit();
+        call_throw!(vmaCreateAllocator, &vma_ci, vma_allocator.as_mut_ptr());
 
         //---------------------------------------------------------------------------------------//
         // (Finally) Return the Device
@@ -872,7 +873,7 @@ impl Device {
     }
 
     pub fn destroy(&mut self) {
-        call!(api::vmaDestroyAllocator, self.allocator);
+        call!(vmaDestroyAllocator, self.allocator);
         call!(self.fns.destroy_device, self.handle, ptr::null());
     }
 
@@ -886,7 +887,7 @@ impl Device {
             }
         } else {
             for gpu in gpu_list {
-                if (gpu.properties.deviceType & api::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) != 0 {
+                if (gpu.properties.deviceType & VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) != 0 {
                     return gpu.clone();
                 }
             }
@@ -900,10 +901,10 @@ impl Device {
         return context::DeviceContext::new(device);
     }
 
-    pub fn get_queue(&self, queue_type: util::QueueType) -> api::VkQueue {
+    pub fn get_queue(&self, queue_type: util::QueueType) -> VkQueue {
         let queue_index = self.get_queue_index(queue_type);
 
-        let mut queue: MaybeUninit<_> = MaybeUninit::<api::VkQueue>::uninit();
+        let mut queue: MaybeUninit<_> = MaybeUninit::<VkQueue>::uninit();
         call!(
             self.fns.get_queue,
             self.handle,
@@ -919,14 +920,14 @@ impl Device {
         let present_queue = self.get_queue(util::QueueType::Present);
 
         // Let's grab some data from the old swapchain
-        let mut cached_width: u32 = 0;
-        let mut cached_height: u32 = 0;
+        let mut cached_width:  u32 = 1920; //todo: pass width/height in somehow...
+        let mut cached_height: u32 = 1080;
 
-        let mut old_swapchain_handle: MaybeUninit<_> = MaybeUninit::<api::VkSwapchainKHR>::uninit();
-        let mut new_swapchain_handle: MaybeUninit<_> = MaybeUninit::<api::VkSwapchainKHR>::uninit();
+        let mut old_swapchain_handle: MaybeUninit<_> = MaybeUninit::<VkSwapchainKHR>::uninit();
+        let mut new_swapchain_handle: MaybeUninit<_> = MaybeUninit::<VkSwapchainKHR>::uninit();
 
         if let Some(ref swapchain) = old_swapchain {
-            cached_width = swapchain.cached_width;
+            cached_width  = swapchain.cached_width;
             cached_height = swapchain.cached_height;
 
             old_swapchain_handle.write(swapchain.handle);
@@ -938,16 +939,16 @@ impl Device {
 
         // Don't allow swapchain dimensions less than 8.
         const MIN_SIZE: u32 = 8;
-        cached_width = std::cmp::max(cached_width, MIN_SIZE);
-        cached_width = std::cmp::max(cached_width, MIN_SIZE);
+        cached_width  = std::cmp::max(cached_width,  MIN_SIZE);
+        cached_height = std::cmp::max(cached_height, MIN_SIZE);
 
         let surface_format = self.gpu.select_surface_format(consts::DEVICE_FEATURES.prefer_hdr);
         let swapchain_caps = Gpu::query_swapchain_capabilities(&self.instance, &self.surface, self.gpu.handle);
 
         // Select the present mode
-        let mut present_mode: api::VkPresentModeKHR = api::VK_PRESENT_MODE_FIFO_KHR; //worst-case fallback if mailbox is not present
+        let mut present_mode: VkPresentModeKHR = VK_PRESENT_MODE_FIFO_KHR; //worst-case fallback if mailbox is not present
         for mode in swapchain_caps.present_modes {
-            if mode == api::VK_PRESENT_MODE_MAILBOX_KHR {
+            if mode == VK_PRESENT_MODE_MAILBOX_KHR {
                 present_mode = mode;
                 break;
             }
@@ -958,14 +959,14 @@ impl Device {
         //   that the surface size will be determined by the extent of a swapchain targeting the surface.
         //
         // We'll use the cached dimensions as the fallback. This will either be set by the device recreation or by onResize()
-        let mut swapchain_extent = api::VkExtent2D{ width: cached_width, height: cached_height };
+        let mut swapchain_extent = VkExtent2D{ width: cached_width, height: cached_height };
         if (swapchain_caps.capabilities.currentExtent.width  != u32::MAX && swapchain_caps.capabilities.currentExtent.height != u32::MAX) {
             swapchain_extent = swapchain_caps.capabilities.currentExtent;
         }
 
         // Clamp to the value allowed by the GPU.
-        let image_min: api::VkExtent2D = swapchain_caps.capabilities.minImageExtent;
-        let image_max: api::VkExtent2D = swapchain_caps.capabilities.maxImageExtent;
+        let image_min: VkExtent2D = swapchain_caps.capabilities.minImageExtent;
+        let image_max: VkExtent2D = swapchain_caps.capabilities.maxImageExtent;
         swapchain_extent.width  = swapchain_extent.width.clamp(image_min.width,  image_max.width);
         swapchain_extent.height = swapchain_extent.height.clamp(image_min.height, image_max.height);
 
@@ -980,14 +981,14 @@ impl Device {
         // Create the Swapchain
         //
 
-        let mut swapchain_ci = api::VkSwapchainCreateInfoKHR::default();
+        let mut swapchain_ci = VkSwapchainCreateInfoKHR::default();
         swapchain_ci.surface          = self.surface.handle;
         swapchain_ci.minImageCount    = image_count;
         swapchain_ci.imageFormat      = surface_format.format;
         swapchain_ci.imageColorSpace  = surface_format.colorSpace;
         swapchain_ci.imageExtent      = swapchain_extent;
         swapchain_ci.imageArrayLayers = 1;
-        swapchain_ci.imageUsage       = api::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|api::VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        swapchain_ci.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
         // We expect to have a present and graphics queue.
         let present_queue_index  = self.gpu.queue_infos.present.expect("Failed to obtain present queue index");
@@ -997,19 +998,19 @@ impl Device {
         let queue_family_indices: [u32; 2] = [present_queue_index, graphics_queue_index];
 
         if present_queue_index != graphics_queue_index {
-            swapchain_ci.imageSharingMode      = api::VK_SHARING_MODE_CONCURRENT;
+            swapchain_ci.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
             swapchain_ci.queueFamilyIndexCount = 2;
             swapchain_ci.pQueueFamilyIndices   = queue_family_indices.as_ptr();
         } else {
-            swapchain_ci.imageSharingMode      = api::VK_SHARING_MODE_EXCLUSIVE;
+            swapchain_ci.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
             swapchain_ci.queueFamilyIndexCount = 0;
             swapchain_ci.pQueueFamilyIndices   = ptr::null_mut();
         }
 
         swapchain_ci.preTransform   = swapchain_caps.capabilities.currentTransform;
-        swapchain_ci.compositeAlpha = api::VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         swapchain_ci.presentMode    = present_mode;
-        swapchain_ci.clipped        = api::VK_TRUE;
+        swapchain_ci.clipped        = VK_TRUE;
 
         if old_swapchain.is_some() {
             swapchain_ci.oldSwapchain = unsafe { old_swapchain_handle.assume_init() };
@@ -1025,24 +1026,24 @@ impl Device {
         image_count = 0;
         call_throw!(self.fns.get_swapchain_images, self.handle, swapchain, &mut image_count, ptr::null_mut());
 
-        let mut swapchain_images      = Vec::<api::VkImage>::with_capacity(image_count as usize);
-        let mut swapchain_image_views = Vec::<api::VkImageView>::with_capacity(image_count as usize);
+        let mut swapchain_images      = Vec::<VkImage>::with_capacity(image_count as usize);
+        let mut swapchain_image_views = Vec::<VkImageView>::with_capacity(image_count as usize);
 
         swapchain_images.resize(image_count as usize, ptr::null_mut());
         call_throw!(self.fns.get_swapchain_images, self.handle, swapchain, &mut image_count, swapchain_images.as_mut_ptr());
 
         for i in 0..image_count {
-            let mut image_view_ci = api::VkImageViewCreateInfo::default();
+            let mut image_view_ci = VkImageViewCreateInfo::default();
             image_view_ci.image                           = swapchain_images[i as usize];
-            image_view_ci.viewType                        = api::VK_IMAGE_VIEW_TYPE_2D;
+            image_view_ci.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
             image_view_ci.format                          = surface_format.format;
-            image_view_ci.subresourceRange.aspectMask     = api::VK_IMAGE_ASPECT_COLOR_BIT;
+            image_view_ci.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
             image_view_ci.subresourceRange.baseMipLevel   = 0;
             image_view_ci.subresourceRange.levelCount     = 1;
             image_view_ci.subresourceRange.baseArrayLayer = 0;
             image_view_ci.subresourceRange.layerCount     = 1;
 
-            let mut view: MaybeUninit<_> = MaybeUninit::<api::VkImageView>::uninit();
+            let mut view: MaybeUninit<_> = MaybeUninit::<VkImageView>::uninit();
             call_throw!(self.fns.create_image_view, self.handle, &image_view_ci, ptr::null(), view.as_mut_ptr());
 
             swapchain_image_views.push(unsafe{ view.assume_init() });
@@ -1178,10 +1179,10 @@ impl Device {
     pub fn create_command_pool(&self, queue_type: util::QueueType) -> CommandPool {
         let queue_index = self.get_queue_index(queue_type);
 
-        let mut command_pool_ci = api::VkCommandPoolCreateInfo::default();
+        let mut command_pool_ci = VkCommandPoolCreateInfo::default();
         command_pool_ci.queueFamilyIndex = queue_index;
 
-        let mut pool: MaybeUninit<_> = MaybeUninit::<api::VkCommandPool>::uninit();
+        let mut pool: MaybeUninit<_> = MaybeUninit::<VkCommandPool>::uninit();
         call_throw!(self.fns.create_command_pool, self.handle, &command_pool_ci, ptr::null(), pool.as_mut_ptr());
 
         let fn_table = CommandPoolFnTable{};
@@ -1197,44 +1198,47 @@ impl Device {
     }
 
     pub fn create_command_buffer(&self, command_pool: &CommandPool) -> CommandBuffer {
-        let mut command_buffer_ci = api::VkCommandBufferAllocateInfo::default();
+        let mut command_buffer_ci = VkCommandBufferAllocateInfo::default();
         command_buffer_ci.commandPool        = command_pool.handle;
         command_buffer_ci.commandBufferCount = 1;
 
-        let mut buffer: MaybeUninit<_> = MaybeUninit::<api::VkCommandBuffer>::uninit();
+        let mut buffer: MaybeUninit<_> = MaybeUninit::<VkCommandBuffer>::uninit();
         call_throw!(self.fns.alloc_command_buffers, self.handle, &command_buffer_ci, buffer.as_mut_ptr());
 
         let fn_table = CommandBufferFnTable{
-            begin_command_buffer:  self.fns.begin_command_buffer,
-            end_command_buffer:    self.fns.end_command_buffer,
-            reset_command_buffer:  self.fns.reset_command_buffer,
-            cmd_pipeline_barrier2: self.fns.cmd_pipeline_barrier2,
-            cmd_clear_color_image: self.fns.cmd_clear_color_image,
-            cmd_blit_image2:       self.fns.cmd_blit_image2,
+            begin_command_buffer:     self.fns.begin_command_buffer,
+            end_command_buffer:       self.fns.end_command_buffer,
+            reset_command_buffer:     self.fns.reset_command_buffer,
+            cmd_pipeline_barrier2:    self.fns.cmd_pipeline_barrier2,
+            cmd_clear_color_image:    self.fns.cmd_clear_color_image,
+            cmd_blit_image2:          self.fns.cmd_blit_image2,
+            cmd_bind_pipeline:        self.fns.cmd_bind_pipeline,
+            cmd_bind_descriptor_sets: self.fns.cmd_bind_descriptor_sets,
+            cmd_dispatch:             self.fns.cmd_dispatch
         };
 
         return CommandBuffer::new(fn_table, unsafe { buffer.assume_init() });
     }
 
     pub fn create_semaphore(&self) -> super::Semaphore {
-        let semaphore_ci = api::VkSemaphoreCreateInfo::default();
+        let semaphore_ci = VkSemaphoreCreateInfo::default();
 
-        let mut semaphore: MaybeUninit<_> = MaybeUninit::<api::VkSemaphore>::uninit();
+        let mut semaphore: MaybeUninit<_> = MaybeUninit::<VkSemaphore>::uninit();
         call_throw!(self.fns.create_semaphore, self.handle, &semaphore_ci, ptr::null(), semaphore.as_mut_ptr());
 
         return unsafe { semaphore.assume_init() };
     }
 
     pub fn create_timeline_semaphore(&self, initial_value: u64) -> super::TimelineSemaphore {
-        let mut timeline_ci = api::VkSemaphoreTypeCreateInfo::default();
+        let mut timeline_ci = VkSemaphoreTypeCreateInfo::default();
         timeline_ci.initialValue = initial_value;
 
-        let timeline_ci_ptr: *mut api::VkSemaphoreTypeCreateInfo = &mut timeline_ci;
+        let timeline_ci_ptr: *mut VkSemaphoreTypeCreateInfo = &mut timeline_ci;
 
-        let mut semaphore_ci = api::VkSemaphoreCreateInfo::default();
+        let mut semaphore_ci = VkSemaphoreCreateInfo::default();
         semaphore_ci.pNext = timeline_ci_ptr as *mut std::os::raw::c_void;
 
-        let mut semaphore: MaybeUninit<_> = MaybeUninit::<api::VkSemaphore>::uninit();
+        let mut semaphore: MaybeUninit<_> = MaybeUninit::<VkSemaphore>::uninit();
         call_throw!(self.fns.create_semaphore, self.handle, &semaphore_ci, ptr::null(), semaphore.as_mut_ptr());
 
         return unsafe { semaphore.assume_init() };
@@ -1249,10 +1253,10 @@ impl Device {
     }
 
     pub fn create_fence(&self, set_signaled: bool) -> super::Fence {
-        let mut fence_ci = api::VkFenceCreateInfo::default();
-        fence_ci.flags = if set_signaled { api::VK_FENCE_CREATE_SIGNALED_BIT } else { 0 };
+        let mut fence_ci = VkFenceCreateInfo::default();
+        fence_ci.flags = if set_signaled { VK_FENCE_CREATE_SIGNALED_BIT } else { 0 };
 
-        let mut fence: MaybeUninit<_> = MaybeUninit::<api::VkFence>::uninit();
+        let mut fence: MaybeUninit<_> = MaybeUninit::<VkFence>::uninit();
         call_throw!(self.fns.create_fence, self.handle, &fence_ci, ptr::null(), fence.as_mut_ptr());
 
         return unsafe { fence.assume_init() };
@@ -1268,12 +1272,12 @@ impl Device {
 
     pub fn allocate_image_memory(
         &self,
-        extent:             api::VkExtent3D,
-        format:             api::VkFormat,
-        image_usage:        api::VkImageUsageFlags,
-        memory_usage:       api::VmaMemoryUsage,
-        memory_props:       api::VkMemoryPropertyFlagBits,
-        image_aspect_flags: api::VkImageAspectFlagBits)    -> super::AllocatedImage
+        extent:             VkExtent3D,
+        format:             VkFormat,
+        image_usage:        VkImageUsageFlags,
+        memory_usage:       VmaMemoryUsage,
+        memory_props:       VkMemoryPropertyFlagBits,
+        image_aspect_flags: VkImageAspectFlagBits)    -> super::AllocatedImage
     {
         let mut result = super::AllocatedImage::default();
 
@@ -1284,15 +1288,15 @@ impl Device {
         let image_ci = util::make_image_ci(format, image_usage, extent);
 
         //for the draw image, we want to allocate it from gpu local memory
-        let mut image_alloc_info = api::VmaAllocationCreateInfo::default();
+        let mut image_alloc_info = VmaAllocationCreateInfo::default();
         image_alloc_info.usage          = memory_usage;
         image_alloc_info.preferredFlags = memory_props;
 
         //allocate and create the image
-        call_throw!(api::vmaCreateImage, self.allocator, &image_ci, &image_alloc_info, &mut result.image, &mut result.memory, ptr::null_mut());
+        call_throw!(vmaCreateImage, self.allocator, &image_ci, &image_alloc_info, &mut result.image, &mut result.memory, ptr::null_mut());
 
         //build an image-view for the draw image to use for rendering
-        let image_view_ci = util::make_image_view_ci(result.format, result.image, api::VK_IMAGE_ASPECT_COLOR_BIT);
+        let image_view_ci = util::make_image_view_ci(result.format, result.image, VK_IMAGE_ASPECT_COLOR_BIT);
 
         call_throw!(self.fns.create_image_view, self.handle, &image_view_ci, ptr::null_mut(), &mut result.view);
 
@@ -1301,9 +1305,179 @@ impl Device {
 
     pub fn destroy_image_memory(&self, image: &mut super::AllocatedImage) {
         call!(self.fns.destroy_image_view, self.handle, image.view, ptr::null_mut());
-        call!(api::vmaDestroyImage, self.allocator, image.image, image.memory);
+        call!(vmaDestroyImage, self.allocator, image.image, image.memory);
 
         image.image  = ptr::null_mut();
         image.memory = ptr::null_mut();
+    }
+
+    pub fn create_descriptor_set_layout(&self,
+        layout_bindings: &[VkDescriptorSetLayoutBinding],
+        flags:            VkDescriptorSetLayoutCreateFlags
+    ) -> VkDescriptorSetLayout
+    {
+        let descriptor_layout_ci = VkDescriptorSetLayoutCreateInfo{
+            sType:        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            pNext:        ptr::null(),
+            flags,
+            bindingCount: layout_bindings.len() as u32,
+            pBindings:    layout_bindings.as_ptr(),
+        };
+
+        let mut layout: MaybeUninit<_> = MaybeUninit::<VkDescriptorSetLayout>::uninit();
+        call_throw!(self.fns.create_descriptor_set_layout, self.handle, &descriptor_layout_ci, ptr::null(), layout.as_mut_ptr());
+
+        return unsafe { layout.assume_init() };
+    }
+
+    pub fn destroy_descriptor_set_layout(&self, layout: VkDescriptorSetLayout) {
+        call!(self.fns.destroy_descriptor_set_layout, self.handle, layout, ptr::null());
+    }
+
+    pub fn create_descriptor_allocator(&self, max_sets: u32, pool_ratios: &[PoolSizeRatio]) -> DescriptorAllocator {
+        let mut pool_sizes = Vec::<VkDescriptorPoolSize>::with_capacity(pool_ratios.len());
+        for ratio in pool_ratios {
+            pool_sizes.push(VkDescriptorPoolSize{
+                type_:           ratio.descriptor_type,
+                descriptorCount: (ratio.ratio * max_sets as f32) as u32,
+            });
+        }
+
+        let pool_info = VkDescriptorPoolCreateInfo{
+            sType:         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            pNext:         ptr::null(),
+            flags:         0,
+            maxSets:       max_sets,
+            poolSizeCount: pool_sizes.len() as u32,
+            pPoolSizes:    pool_sizes.as_ptr(),
+        };
+
+        let mut pool: MaybeUninit<_> = MaybeUninit::<VkDescriptorPool>::uninit();
+        call_throw!(self.fns.create_descriptor_pool, self.handle, &pool_info, ptr::null(), pool.as_mut_ptr());
+
+        return DescriptorAllocator{ pool: unsafe{ pool.assume_init() } };
+    }
+
+    pub fn clear_descriptor_allocator(&self, allocator: &DescriptorAllocator) {
+        call!(self.fns.reset_descriptor_pool, self.handle, allocator.pool, 0);
+    }
+
+    pub fn destroy_descriptor_allocator(&self, allocator: &mut DescriptorAllocator) {
+        call!(self.fns.destroy_descriptor_pool, self.handle, allocator.pool, ptr::null());
+
+        allocator.pool = ptr::null_mut();
+    }
+
+    pub fn allocate_descriptors(&self, allocator: &DescriptorAllocator, layout: VkDescriptorSetLayout) -> VkDescriptorSet {
+        let set_ci = VkDescriptorSetAllocateInfo{
+            sType:              VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            pNext:              ptr::null(),
+            descriptorPool:     allocator.pool,
+            descriptorSetCount: 1,
+            pSetLayouts:        &layout,
+        };
+
+        let mut set: MaybeUninit<_> = MaybeUninit::<VkDescriptorSet>::uninit();
+        call_throw!(self.fns.alloc_descriptor_sets, self.handle, &set_ci, set.as_mut_ptr());
+
+        return unsafe { set.assume_init() };
+    }
+
+    pub fn update_descriptor_sets(&self, image_info: VkDescriptorImageInfo, set: VkDescriptorSet, set_count: u32, set_binding: u32, set_offset: u32, descriptor_type: VkDescriptorType) {
+        let draw_write = VkWriteDescriptorSet{
+            sType:            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            pNext:            ptr::null(),
+            dstSet:           set,
+            dstBinding:       set_binding,
+            dstArrayElement:  set_offset,
+            descriptorCount:  set_count,
+            descriptorType:   descriptor_type,
+            pImageInfo:       &image_info,
+            pBufferInfo:      ptr::null(),
+            pTexelBufferView: ptr::null(),
+        };
+
+        let descriptor_write_count = 1;
+        let descriptor_copy_count  = 0;
+        call!(self.fns.update_descriptor_sets, self.handle, descriptor_write_count, &draw_write, descriptor_copy_count, ptr::null());
+    }
+
+    pub fn create_shader_module(&self, shader_code: &[u8]) -> Option<VkShaderModule> {
+        let module_ci = VkShaderModuleCreateInfo{
+            sType:    VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            pNext:    ptr::null(),
+            flags:    0,
+            codeSize: shader_code.len(),
+            pCode:    shader_code.as_ptr() as *mut u32,
+        };
+
+        let mut module: MaybeUninit<_> = MaybeUninit::<VkShaderModule>::uninit();
+        let result = call_nothrow!(self.fns.create_shader_module, self.handle, &module_ci, ptr::null(), module.as_mut_ptr());
+        if result != VK_SUCCESS {
+            return None;
+        }
+
+        return Some(unsafe{ module.assume_init() });
+    }
+
+    pub fn destroy_shader_module(&self, module: VkShaderModule) {
+
+        call!(self.fns.destroy_shader_module, self.handle, module, ptr::null());
+    }
+
+    pub fn create_pipeline_layout(&self, descriptor_sets: &[VkDescriptorSetLayout], push_constants: &[VkPushConstantRange]) -> VkPipelineLayout {
+        let layout_ci = VkPipelineLayoutCreateInfo{
+            sType:                  VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            pNext:                  ptr::null(),
+            flags:                  0,
+            setLayoutCount:         descriptor_sets.len() as u32,
+            pSetLayouts:            descriptor_sets.as_ptr(),
+            pushConstantRangeCount: push_constants.len() as u32,
+            pPushConstantRanges:    push_constants.as_ptr(),
+        };
+
+        let mut layout: MaybeUninit<_> = MaybeUninit::<VkPipelineLayout>::uninit();
+        call_throw!(self.fns.create_pipeline_layout, self.handle, &layout_ci, ptr::null(), layout.as_mut_ptr());
+
+        return unsafe{ layout.assume_init() };
+    }
+
+    pub fn destroy_pipeline_layout(&self, layout: VkPipelineLayout) {
+        call!(self.fns.destroy_pipeline_layout, self.handle, layout, ptr::null());
+    }
+
+    pub fn create_compute_pipeline(&self, compute_module: VkShaderModule, pipeline_layout: VkPipelineLayout) -> VkPipeline {
+        let entry_point = CString::new("main").unwrap();
+
+        let stage_info = VkPipelineShaderStageCreateInfo{
+            sType:               VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            pNext:               ptr::null(),
+            flags:               0,
+            stage:               VK_SHADER_STAGE_COMPUTE_BIT,
+            module:              compute_module,
+            pName:               entry_point.as_ptr(),
+            pSpecializationInfo: ptr::null(), //todo: specialization info
+        };
+
+        let pipeline_ci = VkComputePipelineCreateInfo{
+            sType:              VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+            pNext:              ptr::null(),
+            flags:              0,
+            stage:              stage_info,
+            layout:             pipeline_layout,
+            basePipelineHandle: ptr::null_mut(),
+            basePipelineIndex:  0,
+        };
+
+        let pipeline_cache: VkPipelineCache = ptr::null_mut(); //todo: support pipeline caches
+
+        let mut pipeline: MaybeUninit<_> = MaybeUninit::<VkPipeline>::uninit();
+        call_throw!(self.fns.create_compute_pipeline, self.handle, pipeline_cache, 1, &pipeline_ci, ptr::null(), pipeline.as_mut_ptr());
+
+        return unsafe { pipeline.assume_init() };
+    }
+
+    pub fn destroy_pipeline(&self, pipeline: VkPipeline) {
+        call!(self.fns.destroy_pipeline, self.handle, pipeline, ptr::null());
     }
 }

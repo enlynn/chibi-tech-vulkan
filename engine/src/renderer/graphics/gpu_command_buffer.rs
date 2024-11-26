@@ -4,12 +4,15 @@ use super::api::*;
 use super::gpu_utils::*;
 
 pub struct CommandBufferFnTable {
-    pub begin_command_buffer:  FN_vkBeginCommandBuffer,
-    pub end_command_buffer:    FN_vkEndCommandBuffer,
-    pub reset_command_buffer:  FN_vkResetCommandBuffer,
-    pub cmd_pipeline_barrier2: FN_vkCmdPipelineBarrier2,
-    pub cmd_clear_color_image: FN_vkCmdClearColorImage,
-    pub cmd_blit_image2:       FN_vkCmdBlitImage2,
+    pub begin_command_buffer:     FN_vkBeginCommandBuffer,
+    pub end_command_buffer:       FN_vkEndCommandBuffer,
+    pub reset_command_buffer:     FN_vkResetCommandBuffer,
+    pub cmd_pipeline_barrier2:    FN_vkCmdPipelineBarrier2,
+    pub cmd_clear_color_image:    FN_vkCmdClearColorImage,
+    pub cmd_blit_image2:          FN_vkCmdBlitImage2,
+    pub cmd_bind_pipeline:        FN_vkCmdBindPipeline,
+    pub cmd_bind_descriptor_sets: FN_vkCmdBindDescriptorSets,
+    pub cmd_dispatch:             FN_vkCmdDispatch,
 }
 
 #[derive(PartialEq)]
@@ -23,12 +26,15 @@ pub struct CommandBuffer {
     pub fns:    CommandBufferFnTable,
     pub handle: VkCommandBuffer,
     pub state:  CommandBufferState,
+
+    // per-record transient state
+    pub bound_pipeline: VkPipeline,
 }
 
 impl CommandBuffer {
     pub fn new(fns: CommandBufferFnTable, handle: VkCommandBuffer) -> Self {
         Self{
-            fns, handle, state: CommandBufferState::Closed,
+            fns, handle, state: CommandBufferState::Closed, bound_pipeline: std::ptr::null_mut(),
         }
     }
 
@@ -52,7 +58,9 @@ impl CommandBuffer {
         assert!(self.state == CommandBufferState::Closed);
 
         call_throw!(self.fns.reset_command_buffer, self.handle, 0);
-        self.state = CommandBufferState::Reset;
+
+        self.state          = CommandBufferState::Reset;
+        self.bound_pipeline = std::ptr::null_mut();
     }
 
     pub fn get_submit_info(&self) -> VkCommandBufferSubmitInfo {
@@ -155,5 +163,24 @@ impl CommandBuffer {
         };
 
         call!(self.fns.cmd_blit_image2, self.handle, &blit_info);
+    }
+
+    pub fn bind_compute_pipeline(&mut self, pipeline: VkPipeline) {
+        if self.bound_pipeline != pipeline {
+            self.bound_pipeline = pipeline;
+        }
+
+        call!(self.fns.cmd_bind_pipeline, self.handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+    }
+
+    pub fn bind_compute_descriptor_sets(&mut self, pipeline_layout: VkPipelineLayout, first_set: u32, descriptor_sets: &[VkDescriptorSet]) {
+        //todo: dynamic descriptor sets
+
+        call!(self.fns.cmd_bind_descriptor_sets, self.handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, first_set,
+            descriptor_sets.len() as u32, descriptor_sets.as_ptr(), 0, std::ptr::null());
+    }
+
+    pub fn dispatch_compute(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        call!(self.fns.cmd_dispatch, self.handle, group_count_x, group_count_y, group_count_z);
     }
 }

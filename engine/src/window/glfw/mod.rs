@@ -44,17 +44,6 @@ impl WindowSystem {
 
         unsafe { glfwShowWindow(glfw_window) };
 
-        // todo: setup window callbacks
-        unsafe{
-            //glfwSetWindowPos(glfw_window, 1920, 1080);
-
-            let mut xpos: i32 = 0;
-            let mut ypos: i32 = 0;
-            glfwGetWindowPos(glfw_window, &mut xpos, &mut ypos);
-
-            println!("Window x({}) : y({})", xpos, ypos);
-        }
-
         return Window::new(glfw_window);
     }
 

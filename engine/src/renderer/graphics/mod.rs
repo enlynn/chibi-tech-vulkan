@@ -8,6 +8,7 @@ pub mod gpu_device_context;
 pub mod gpu_swapchain;
 pub mod gpu_command_pool;
 pub mod gpu_command_buffer;
+pub mod gpu_descriptors;
 
 pub type Semaphore         = api::VkSemaphore;
 pub type TimelineSemaphore = api::VkSemaphore;

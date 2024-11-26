@@ -1,5 +1,6 @@
 mod graphics;
 
+use api::VkDescriptorSetLayout;
 use graphics::*;
 use graphics::{
     AllocatedImage,
@@ -8,6 +9,7 @@ use graphics::{
     gpu_utils::*,
     gpu_command_pool::CommandPool,
     gpu_command_buffer::CommandBuffer,
+    gpu_descriptors::{DescriptorAllocator, DescriptorLayoutBuilder, PoolSizeRatio},
 };
 
 use super::window::NativeSurface;
@@ -67,6 +69,13 @@ pub struct RenderSystem{
     frame_index: usize,
 
     silly: usize,
+
+    global_da:     DescriptorAllocator,
+    draw_image_dl: api::VkDescriptorSetLayout,
+	draw_image_ds: api::VkDescriptorSet,
+
+	gradient_pl:   api::VkPipelineLayout,
+	gradient_p:    api::VkPipeline,
 }
 
 impl RenderSystem {
@@ -107,6 +116,79 @@ impl RenderSystem {
             frame_data.push(Rc::new(init_frame_data(&device)));
         }
 
+        // Create descriptors
+        //
+
+        let global_da = {
+            let sizes: [PoolSizeRatio; 1] = [
+                PoolSizeRatio{descriptor_type: api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, ratio: 1.0 },
+            ];
+
+            device.create_descriptor_allocator(10, sizes.as_slice())
+        };
+
+        let draw_image_dl = {
+            let mut builder = DescriptorLayoutBuilder::new();
+            builder.add_binding(0, api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+            builder.build(&device, api::VK_SHADER_STAGE_COMPUTE_BIT, 0)
+        };
+
+        let draw_image_ds = {
+            let ds = device.allocate_descriptors(&global_da, draw_image_dl);
+
+            let mut image_info = api::VkDescriptorImageInfo::default();
+            image_info.imageLayout = api::VK_IMAGE_LAYOUT_GENERAL;
+            image_info.imageView   = scene_image.view;
+
+            device.update_descriptor_sets(image_info, ds, 1, 0, 0, api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+            ds
+        };
+
+        // The Compute Pipeline
+        //
+
+        let gradient_sm = { // Let's load a compute shader
+            use crate::core::asset_system::{AssetDrive, AssetSystem};
+            use std::io::prelude::*;
+            use std::fs::File;
+
+            let asset_dir  = AssetSystem::get_root_dir(AssetDrive::Priv);
+
+            let shader_dir  = asset_dir.join("shaders/.cache");
+            let shader_file = shader_dir.join("gradient.spv");
+            let display = shader_file.display();
+
+            println!("Shader Cache Directory: {:?}", shader_file);
+
+            // let's read the file
+            let mut file = match File::open(&shader_file) {
+                Err(why) => panic!("couldn't open {}: {}", display, why),
+                Ok(file) => file,
+            };
+
+            // Read the file contents into a string, returns `io::Result<usize>`
+            let mut file_data = Vec::<u8>::new();
+            match file.read_to_end(&mut file_data) {
+                Err(why) => panic!("couldn't read {}: {}", display, why),
+                Ok(_)    => {},
+            }
+
+            device.create_shader_module(file_data.as_slice()).expect("Failed to create VkShaderModule from gradient.spv")
+        };
+
+        let gradient_pl = {
+            let descriptors:    [api::VkDescriptorSetLayout; 1] = [ draw_image_dl ];
+            let push_constants: [api::VkPushConstantRange; 0]   = [];
+
+            device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
+        };
+
+        let gradient_p = device.create_compute_pipeline(gradient_sm, gradient_pl);
+
+        device.destroy_shader_module(gradient_sm);
+
         return RenderSystem{
             device,
             swapchain,
@@ -114,6 +196,11 @@ impl RenderSystem {
             frame_data,
             frame_index: 0,
             silly: 0,
+            global_da,
+            draw_image_dl,
+            draw_image_ds,
+            gradient_pl,
+            gradient_p,
         };
     }
 
@@ -158,15 +245,30 @@ impl RenderSystem {
         command_buffer.begin_recording();
 
         command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_UNDEFINED, api::VK_IMAGE_LAYOUT_GENERAL);
-        command_buffer.clear_color_image(self.scene_image.image, &clear_value);
+
+        let swapchain_image = self.swapchain.get_swapchain_image();
+        let swapchain_extent = self.swapchain.get_extent();
+
+
+        { // Draw background
+            //command_buffer.clear_color_image(self.scene_image.image, &clear_value);
+
+            command_buffer.bind_compute_pipeline(self.gradient_p);
+
+            let descriptors: [api::VkDescriptorSet; 1] = [ self.draw_image_ds ];
+            command_buffer.bind_compute_descriptor_sets(self.gradient_pl, 0, descriptors.as_slice());
+
+            let group_x = self.scene_image.dims.width  as f32 / 16.0;
+            let group_y = self.scene_image.dims.height as f32 / 16.0;
+
+            command_buffer.dispatch_compute(group_x.ceil() as u32, group_y.ceil() as u32, 1);
+        }
 
         // Now, copy the scene framebuffer to the swapchain
-        let swapchain_image = self.swapchain.get_swapchain_image();
 
         command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_GENERAL,   api::VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         command_buffer.transition_image(swapchain_image,        api::VK_IMAGE_LAYOUT_UNDEFINED, api::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        let swapchain_extent = self.swapchain.get_extent();
         let src_extent = api::VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
         let dst_extent = api::VkExtent2D{ width: swapchain_extent.width,      height: swapchain_extent.height      };
 
@@ -210,6 +312,12 @@ impl RenderSystem {
 
     pub fn destroy(&mut self) {
         self.device.wait_idle();
+
+        self.device.destroy_pipeline(self.gradient_p);
+        self.device.destroy_pipeline_layout(self.gradient_pl);
+
+        self.device.destroy_descriptor_allocator(&mut self.global_da);
+        self.device.destroy_descriptor_set_layout(self.draw_image_dl);
 
         for frame_data in &self.frame_data{
             self.device.destroy_command_pool(&mut frame_data.state.borrow_mut().command_pool);

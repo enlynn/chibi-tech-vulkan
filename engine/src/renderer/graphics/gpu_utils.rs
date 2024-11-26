@@ -289,6 +289,18 @@ pub struct DeviceFnTable
     pub cmd_pipeline_barrier2:           FN_vkCmdPipelineBarrier2,
     pub cmd_clear_color_image:           FN_vkCmdClearColorImage,
     pub cmd_blit_image2:                 FN_vkCmdBlitImage2,
+
+    pub reset_descriptor_pool:           FN_vkResetDescriptorPool,
+    pub destroy_descriptor_pool:         FN_vkDestroyDescriptorPool,
+    pub destroy_descriptor_set_layout:   FN_vkDestroyDescriptorSetLayout,
+    pub destroy_shader_module:           FN_vkDestroyShaderModule,
+    pub destroy_pipeline_layout:         FN_vkDestroyPipelineLayout,
+    pub create_compute_pipeline:         FN_vkCreateComputePipelines,
+    pub create_graphics_pipeline:        FN_vkCreateGraphicsPipelines,
+    pub destroy_pipeline:                FN_vkDestroyPipeline,
+    pub cmd_bind_pipeline:               FN_vkCmdBindPipeline,
+    pub cmd_bind_descriptor_sets:        FN_vkCmdBindDescriptorSets,
+    pub cmd_dispatch:                    FN_vkCmdDispatch,
 }
 
 /* ======================================================================== */
@@ -474,6 +486,18 @@ pub fn load_device_functions(gbl: &GlobalFnTable, inst: VkInstance, device: VkDe
         cmd_pipeline_barrier2:           get_device_procaddr!(vkCmdPipelineBarrier2),
         cmd_clear_color_image:           get_device_procaddr!(vkCmdClearColorImage),
         cmd_blit_image2:                 get_device_procaddr!(vkCmdBlitImage2),
+
+        reset_descriptor_pool:           get_device_procaddr!(vkResetDescriptorPool),
+        destroy_descriptor_pool:         get_device_procaddr!(vkDestroyDescriptorPool),
+        destroy_descriptor_set_layout:   get_device_procaddr!(vkDestroyDescriptorSetLayout),
+        destroy_shader_module:           get_device_procaddr!(vkDestroyShaderModule),
+        destroy_pipeline_layout:         get_device_procaddr!(vkDestroyPipelineLayout),
+        create_compute_pipeline:         get_device_procaddr!(vkCreateComputePipelines),
+        create_graphics_pipeline:        get_device_procaddr!(vkCreateGraphicsPipelines),
+        destroy_pipeline:                get_device_procaddr!(vkDestroyPipeline),
+        cmd_bind_pipeline:               get_device_procaddr!(vkCmdBindPipeline),
+        cmd_bind_descriptor_sets:        get_device_procaddr!(vkCmdBindDescriptorSets),
+        cmd_dispatch:                    get_device_procaddr!(vkCmdDispatch),
     };
 
     Ok(funcs)

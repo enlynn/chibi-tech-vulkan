@@ -229,7 +229,34 @@ fn generate_glfw_bindings() {
         .expect("Couldn't write glfw bindings!");
 }
 
+/* ======================================================================== */
+/* Pre-process shaders                                                      */
+
+fn build_shaders() {
+
+    let engine_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .canonicalize()
+        .expect("cannot canonicalize path");
+
+    let compile_path = engine_path.join("assets/shaders/compile.sh");
+
+    // only rebuild if we've added a shader
+    println!("cargo:rerun-if-changed={}", compile_path.to_str().expect("Failed to get string representation of shader compiler path."));
+
+    if !std::process::Command::new(compile_path)
+        .output()
+        .expect("could not spawn `ar`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not emit library file");
+    }
+}
+
 fn main() {
     gen_vulkan_bindings();
     generate_glfw_bindings();
+
+    build_shaders();
 }

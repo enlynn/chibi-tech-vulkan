@@ -4,7 +4,7 @@ This is my little vulkan engine I am testing as I convert it to Rust.
 
 # Platform Support
 
-- Linux: Xlib supported by default. Wayland support is planned.
+- Linux: Xlib and Wayland supported by default.
 - Windows: support is planned and prototyped, but likely not going to work at the moment.
 
 # Dependencies
