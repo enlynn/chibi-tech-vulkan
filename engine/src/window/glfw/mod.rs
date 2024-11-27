@@ -158,4 +158,13 @@ impl Window {
 
         return native_surface;
     }
+
+    pub fn get_framebuffer_size(&self) -> (u32, u32) {
+        let mut width  = 0;
+        let mut height = 0;
+
+        unsafe { glfwGetFramebufferSize(self.handle, &mut width, &mut height); };
+
+        (width as u32, height as u32)
+    }
 }

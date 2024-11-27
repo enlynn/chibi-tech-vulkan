@@ -920,8 +920,8 @@ impl Device {
         let present_queue = self.get_queue(util::QueueType::Present);
 
         // Let's grab some data from the old swapchain
-        let mut cached_width:  u32 = 1920; //todo: pass width/height in somehow...
-        let mut cached_height: u32 = 1080;
+        let mut cached_width:  u32 = 0;
+        let mut cached_height: u32 = 0;
 
         let mut old_swapchain_handle: MaybeUninit<_> = MaybeUninit::<VkSwapchainKHR>::uninit();
         let mut new_swapchain_handle: MaybeUninit<_> = MaybeUninit::<VkSwapchainKHR>::uninit();
@@ -1085,12 +1085,19 @@ impl Device {
             sems
         };
 
+        // Destroy the old swapchain handle
+        //
+
+        if old_swapchain.is_some() {
+            call!(self.fns.destroy_swapchain, self.handle, unsafe { old_swapchain_handle.assume_init() }, ptr::null());
+        }
+
         // Create Swapchain Function Table
         //
 
         let swapchain_fns = SwapchainFnTable{};
 
-        return Swapchain{
+        let result = Swapchain{
             fns:                swapchain_fns,
             handle:             swapchain,
             present_queue,
@@ -1106,6 +1113,8 @@ impl Device {
             known_generation:   if let Some(old) = old_swapchain { old.known_generation   } else { 0 },
             current_generation: if let Some(old) = old_swapchain { old.current_generation } else { 0 },
         };
+
+        return result;
     }
 
     pub fn destroy_swapchain(&self, swapchain: &mut Swapchain) {

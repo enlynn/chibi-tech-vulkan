@@ -1,6 +1,6 @@
 mod graphics;
 
-use api::VkDescriptorSetLayout;
+use api::{VkDescriptorSetLayout, VkExtent3D};
 use graphics::*;
 use graphics::{
     AllocatedImage,
@@ -79,6 +79,45 @@ pub struct RenderSystem{
 }
 
 impl RenderSystem {
+    fn create_scene_images(device: &Device, extent: VkExtent3D) -> AllocatedImage {
+        let image_usages: api::VkImageUsageFlags =
+            api::VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            api::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+            api::VK_IMAGE_USAGE_STORAGE_BIT      |
+            api::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        device.allocate_image_memory(
+            extent,
+            api::VK_FORMAT_R16G16B16A16_SFLOAT,
+            image_usages,
+            api::VMA_MEMORY_USAGE_GPU_ONLY,
+            api::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            api::VK_IMAGE_ASPECT_COLOR_BIT)
+    }
+
+    fn resize_device_resources(&mut self) {
+        self.device.wait_idle();
+
+        self.swapchain = self.device.create_swapchain(Some(&self.swapchain));
+        self.swapchain.validate();
+
+        self.device.destroy_image_memory(&mut self.scene_image);
+        self.scene_image = RenderSystem::create_scene_images(&self.device, self.swapchain.get_extent());
+
+        self.device.clear_descriptor_allocator(&self.global_da);
+        self.draw_image_ds = {
+            let ds = self.device.allocate_descriptors(&self.global_da, self.draw_image_dl);
+
+            let mut image_info = api::VkDescriptorImageInfo::default();
+            image_info.imageLayout = api::VK_IMAGE_LAYOUT_GENERAL;
+            image_info.imageView   = self.scene_image.view;
+
+            self.device.update_descriptor_sets(image_info, ds, 1, 0, 0, api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+            ds
+        };
+    }
+
     pub fn new(create_info: RendererCreateInfo) -> RenderSystem {
         let device = Device::new(gpu_device::CreateInfo{
             features:         gpu_device::Features::default(),  //todo: make configurable
@@ -89,21 +128,7 @@ impl RenderSystem {
 
         let swapchain = device.create_swapchain(None);
 
-        let scene_image = {
-            let image_usages: api::VkImageUsageFlags =
-                api::VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                api::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                api::VK_IMAGE_USAGE_STORAGE_BIT      |
-                api::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-            device.allocate_image_memory(
-                swapchain.get_extent(),
-                api::VK_FORMAT_R16G16B16A16_SFLOAT,
-                image_usages,
-                api::VMA_MEMORY_USAGE_GPU_ONLY,
-                api::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                api::VK_IMAGE_ASPECT_COLOR_BIT)
-        };
+        let scene_image = RenderSystem::create_scene_images(&device, swapchain.get_extent());
 
         let init_frame_data = |device: &Device| -> PerFrameData {
             let command_pool =   device.create_command_pool(QueueType::Graphics);
@@ -211,21 +236,19 @@ impl RenderSystem {
     pub fn render(&mut self, _command_buffer: RenderCommandBuffer) {
         //todo: process incoming render commands
 
-        //todo: process per-frame garbage
-
-        // If the swapchain has been invalidated, recreate it.
+        // If the swapchain has been invalidated, recreate it. Will usually happen when we need to resize.
         if !self.swapchain.is_valid()
         {
-            self.device.wait_idle();
-
-            self.swapchain = self.device.create_swapchain(Some(&self.swapchain));
-            self.swapchain.validate();
+            self.resize_device_resources();
             return; //don't render this frame...
         }
 
         if !self.swapchain.acquire_frame(&self.device) {
             return; // try again next frame
         }
+
+        // todo: process per-frame garbage
+        //
 
         // Render the Frame
         //
@@ -326,5 +349,10 @@ impl RenderSystem {
         self.device.destroy_image_memory(&mut self.scene_image);
         self.device.destroy_swapchain(&mut self.swapchain);
         self.device.destroy();
+    }
+
+    pub fn on_resize(&mut self, width: u32, height: u32)
+    {
+        self.swapchain.on_resize(width, height);
     }
 }

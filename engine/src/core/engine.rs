@@ -32,9 +32,13 @@ impl Engine {
         let window_system = window::WindowSystem::new();
         // todo: set window title/width/height based on user game data.
         let client_window = window_system.create_window("Chibi Vulkan", 1920, 1080);
-        let render_system = renderer::RenderSystem::new(renderer::RendererCreateInfo{
+        let mut render_system = renderer::RenderSystem::new(renderer::RendererCreateInfo{
             surface: client_window.get_native_surface(),
         });
+
+
+        let (width, height) = client_window.get_framebuffer_size();
+        render_system.on_resize(width, height);
 
         return Engine{
             game,

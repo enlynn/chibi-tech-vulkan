@@ -84,4 +84,8 @@ impl Window {
     pub fn get_native_surface(&self) -> NativeSurface {
         return self.inner.get_native_surface();
     }
+
+    pub fn get_framebuffer_size(&self) -> (u32, u32) {
+        return self.inner.get_framebuffer_size();
+    }
 }
