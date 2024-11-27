@@ -55,4 +55,8 @@ fi
 # glslang [option]... [file]...
 
 # -o "$outdir/gradient.comp.csc"
-glslang --target-env vulkan1.3 --glsl-version 460 -o "$outdir/gradient.spv" "$srcdir/gradient.comp"
+glslang --target-env vulkan1.3 --glsl-version 460 -o "$outdir/gradient.comp.spv" "$srcdir/gradient.comp"
+
+# Example colored triangle with hardcoded vertices
+glslang --target-env vulkan1.3 --glsl-version 450 -o "$outdir/colored_triangle.vert.spv" "$srcdir/colored_triangle.vert"
+glslang --target-env vulkan1.3 --glsl-version 450 -o "$outdir/colored_triangle.frag.spv" "$srcdir/colored_triangle.frag"

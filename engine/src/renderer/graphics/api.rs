@@ -426,3 +426,260 @@ impl Default for VkDescriptorImageInfo {
         }
     }
 }
+
+impl Default for VkPipelineInputAssemblyStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                  VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            pNext:                  ptr::null(),
+            flags:                  0,
+            topology:               0,
+            primitiveRestartEnable: VK_FALSE
+        }
+    }
+}
+
+impl Default for VkPipelineRasterizationStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                   VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            pNext:                   ptr::null(),
+            flags:                   0,
+            depthClampEnable:        VK_FALSE,
+            rasterizerDiscardEnable: VK_FALSE,
+            polygonMode:             0,
+            cullMode:                0,
+            frontFace:               0,
+            depthBiasEnable:         VK_FALSE,
+            depthBiasConstantFactor: 0.0,
+            depthBiasClamp:          0.0,
+            depthBiasSlopeFactor:    0.0,
+            lineWidth:               0.0
+        }
+    }
+}
+
+impl Default for VkPipelineColorBlendAttachmentState {
+    fn default() -> Self {
+        Self{
+            blendEnable:         VK_FALSE,
+            srcColorBlendFactor: VK_BLEND_FACTOR_ZERO,
+            dstColorBlendFactor: VK_BLEND_FACTOR_ZERO,
+            colorBlendOp:        VK_BLEND_OP_ADD,
+            srcAlphaBlendFactor: VK_BLEND_FACTOR_ZERO,
+            dstAlphaBlendFactor: VK_BLEND_FACTOR_ZERO,
+            alphaBlendOp:        VK_BLEND_OP_ADD,
+            colorWriteMask:      0,
+        }
+    }
+}
+
+impl Default for VkPipelineMultisampleStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                 VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            pNext:                 ptr::null(),
+            flags:                 0,
+            rasterizationSamples:  0,
+            sampleShadingEnable:   VK_FALSE,
+            minSampleShading:      0.0,
+            pSampleMask:           ptr::null(),
+            alphaToCoverageEnable: VK_FALSE,
+            alphaToOneEnable:      VK_FALSE
+        }
+    }
+}
+
+impl Default for VkStencilOpState {
+    fn default() -> Self {
+        Self{
+            failOp:      VK_STENCIL_OP_KEEP,
+            passOp:      VK_STENCIL_OP_KEEP,
+            depthFailOp: VK_STENCIL_OP_KEEP,
+            compareOp:   VK_COMPARE_OP_NEVER,
+            compareMask: 0,
+            writeMask:   0,
+            reference:   0
+        }
+    }
+}
+
+impl Default for VkPipelineDepthStencilStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                 VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            pNext:                 ptr::null(),
+            flags:                 0,
+            depthTestEnable:       VK_FALSE,
+            depthWriteEnable:      VK_FALSE,
+            depthCompareOp:        VK_COMPARE_OP_NEVER,
+            depthBoundsTestEnable: VK_FALSE,
+            stencilTestEnable:     VK_FALSE,
+            front:                 VkStencilOpState::default(),
+            back:                  VkStencilOpState::default(),
+            minDepthBounds:        0.0,
+            maxDepthBounds:        0.0
+        }
+    }
+}
+
+impl Default for VkPipelineRenderingCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                   VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            pNext:                   ptr::null(),
+            viewMask:                0,
+            colorAttachmentCount:    0,
+            pColorAttachmentFormats: ptr::null(),
+            depthAttachmentFormat:   VK_FORMAT_UNDEFINED,
+            stencilAttachmentFormat: VK_FORMAT_UNDEFINED,
+        }
+    }
+}
+
+impl Default for VkPipelineViewportStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:         VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            pNext:         ptr::null(),
+            flags:         0,
+            viewportCount: 0,
+            pViewports:    ptr::null(),
+            scissorCount:  0,
+            pScissors:     ptr::null(),
+        }
+    }
+}
+
+impl Default for VkPipelineColorBlendStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:           VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            pNext:           ptr::null(),
+            flags:           0,
+            logicOpEnable:   VK_FALSE,
+            logicOp:         VK_LOGIC_OP_CLEAR,
+            attachmentCount: 0,
+            pAttachments:    ptr::null(),
+            blendConstants:  [0.0; 4usize]
+        }
+    }
+}
+
+impl Default for VkPipelineVertexInputStateCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                           VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            pNext:                           ptr::null(),
+            flags:                           0,
+            vertexBindingDescriptionCount:   0,
+            pVertexBindingDescriptions:      ptr::null(),
+            vertexAttributeDescriptionCount: 0,
+            pVertexAttributeDescriptions:    ptr::null(),
+        }
+    }
+}
+
+impl Default for VkGraphicsPipelineCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:               VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+            pNext:               ptr::null(),
+            flags:               0,
+            stageCount:          0,
+            pStages:             ptr::null(),
+            pVertexInputState:   ptr::null(),
+            pInputAssemblyState: ptr::null(),
+            pTessellationState:  ptr::null(),
+            pViewportState:      ptr::null(),
+            pRasterizationState: ptr::null(),
+            pMultisampleState:   ptr::null(),
+            pDepthStencilState:  ptr::null(),
+            pColorBlendState:    ptr::null(),
+            pDynamicState:       ptr::null(),
+            layout:              ptr::null_mut(),
+            renderPass:          ptr::null_mut(),
+            subpass:             0,
+            basePipelineHandle:  ptr::null_mut(),
+            basePipelineIndex:   0,
+        }
+    }
+}
+
+impl Default for VkPhysicalDeviceDynamicRenderingFeatures {
+    fn default() -> Self {
+        Self{
+            sType:            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+            pNext:            ptr::null_mut(),
+            dynamicRendering: VK_FALSE,
+        }
+    }
+}
+
+impl Default for VkClearColorValue {
+    fn default() -> Self {
+        Self {
+            uint32: [0u32; 4],
+        }
+    }
+}
+
+impl Default for VkClearValue {
+    fn default() -> Self {
+        Self{
+            color: VkClearColorValue::default(),
+        }
+    }
+}
+
+impl Default for VkRenderingAttachmentInfo {
+    fn default() -> Self {
+        Self {
+            sType:              VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            pNext:              ptr::null(),
+            imageView:          ptr::null_mut(),
+            imageLayout:        VK_IMAGE_LAYOUT_UNDEFINED,
+            resolveMode:        VK_RESOLVE_MODE_NONE,
+            resolveImageView:   ptr::null_mut(),
+            resolveImageLayout: VK_IMAGE_LAYOUT_UNDEFINED,
+            loadOp:             VK_ATTACHMENT_LOAD_OP_LOAD,
+            storeOp:            VK_ATTACHMENT_STORE_OP_STORE,
+            clearValue:         VkClearValue::default(),
+        }
+    }
+}
+
+impl Default for VkOffset2D {
+    fn default() -> Self {
+        Self{
+            x: 0,
+            y: 0,
+        }
+    }
+}
+
+impl Default for VkRect2D {
+    fn default() -> Self {
+        Self{
+            offset: VkOffset2D::default(),
+            extent: VkExtent2D::default(),
+        }
+    }
+}
+
+impl Default for VkRenderingInfo {
+    fn default() -> Self {
+        Self {
+            sType:                VK_STRUCTURE_TYPE_RENDERING_INFO,
+            pNext:                ptr::null(),
+            flags:                0,
+            renderArea:           VkRect2D::default(),
+            layerCount:           0,
+            viewMask:             0,
+            colorAttachmentCount: 0,
+            pColorAttachments:    ptr::null(),
+            pDepthAttachment:     ptr::null(),
+            pStencilAttachment:   ptr::null(),
+        }
+    }
+}

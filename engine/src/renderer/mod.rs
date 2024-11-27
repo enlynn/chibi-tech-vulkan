@@ -10,6 +10,7 @@ use graphics::{
     gpu_command_pool::CommandPool,
     gpu_command_buffer::CommandBuffer,
     gpu_descriptors::{DescriptorAllocator, DescriptorLayoutBuilder, PoolSizeRatio},
+    gpu_pipeline::*,
 };
 
 use super::window::NativeSurface;
@@ -17,6 +18,7 @@ use super::window::NativeSurface;
 use std::borrow::BorrowMut;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::str::FromStr;
 
 #[derive(Clone, Copy)]
 pub enum RenderCommand{
@@ -74,8 +76,57 @@ pub struct RenderSystem{
     draw_image_dl: api::VkDescriptorSetLayout,
 	draw_image_ds: api::VkDescriptorSet,
 
+	// for the background
 	gradient_pl:   api::VkPipelineLayout,
 	gradient_p:    api::VkPipeline,
+
+	// for the triangle
+	triangle_pl:   api::VkPipelineLayout,
+	triangle_p:    api::VkPipeline,
+}
+
+enum ShaderStage {
+    Vertex,
+    Fragment,
+    Compute,
+}
+
+fn load_shader_module(device: &Device, shader_name: &str, stage: ShaderStage) -> api::VkShaderModule {
+    use crate::core::asset_system::{AssetDrive, AssetSystem};
+    use std::io::prelude::*;
+    use std::fs::File;
+
+    let asset_dir  = AssetSystem::get_root_dir(AssetDrive::Priv);
+
+    //todo: cache this so we don't have to recreate it for every shader
+    let shader_dir  = asset_dir.join("shaders/.cache");
+
+    let mut shader_name_str = String::from_str(shader_name).expect("Failed to construct string.");
+    match stage {
+        ShaderStage::Vertex   => { shader_name_str.push_str(".vert.spv"); },
+        ShaderStage::Fragment => { shader_name_str.push_str(".frag.spv"); },
+        ShaderStage::Compute  => { shader_name_str.push_str(".comp.spv"); },
+    };
+
+    let shader_file = shader_dir.join(shader_name_str);
+    let display = shader_file.display();
+
+    println!("Shader Cache Directory: {:?}", shader_file);
+
+    // let's read the file
+    let mut file = match File::open(&shader_file) {
+        Err(why) => panic!("couldn't open {}: {}", display, why),
+        Ok(file) => file,
+    };
+
+    // Read the file contents into a string, returns `io::Result<usize>`
+    let mut file_data = Vec::<u8>::new();
+    match file.read_to_end(&mut file_data) {
+        Err(why) => panic!("couldn't read {}: {}", display, why),
+        Ok(_)    => {},
+    }
+
+    device.create_shader_module(file_data.as_slice()).expect("Failed to create VkShaderModule from gradient.spv")
 }
 
 impl RenderSystem {
@@ -174,34 +225,7 @@ impl RenderSystem {
         // The Compute Pipeline
         //
 
-        let gradient_sm = { // Let's load a compute shader
-            use crate::core::asset_system::{AssetDrive, AssetSystem};
-            use std::io::prelude::*;
-            use std::fs::File;
-
-            let asset_dir  = AssetSystem::get_root_dir(AssetDrive::Priv);
-
-            let shader_dir  = asset_dir.join("shaders/.cache");
-            let shader_file = shader_dir.join("gradient.spv");
-            let display = shader_file.display();
-
-            println!("Shader Cache Directory: {:?}", shader_file);
-
-            // let's read the file
-            let mut file = match File::open(&shader_file) {
-                Err(why) => panic!("couldn't open {}: {}", display, why),
-                Ok(file) => file,
-            };
-
-            // Read the file contents into a string, returns `io::Result<usize>`
-            let mut file_data = Vec::<u8>::new();
-            match file.read_to_end(&mut file_data) {
-                Err(why) => panic!("couldn't read {}: {}", display, why),
-                Ok(_)    => {},
-            }
-
-            device.create_shader_module(file_data.as_slice()).expect("Failed to create VkShaderModule from gradient.spv")
-        };
+        let gradient_sm = load_shader_module(&device, "gradient", ShaderStage::Compute);
 
         let gradient_pl = {
             let descriptors:    [api::VkDescriptorSetLayout; 1] = [ draw_image_dl ];
@@ -213,6 +237,50 @@ impl RenderSystem {
         let gradient_p = device.create_compute_pipeline(gradient_sm, gradient_pl);
 
         device.destroy_shader_module(gradient_sm);
+
+        // Colored Triangle Pipeline
+        //
+
+        let colored_tri_vert_sm = load_shader_module(&device, "colored_triangle", ShaderStage::Vertex);
+        let colored_tri_frag_sm = load_shader_module(&device, "colored_triangle", ShaderStage::Fragment);
+
+        let triangle_pl = {
+            let descriptors:    [api::VkDescriptorSetLayout; 0] = [];
+            let push_constants: [api::VkPushConstantRange;   0] = [];
+
+            device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
+        };
+
+        let triangle_p = {
+            let mut builder = GraphicsPipelineBuilder::new();
+
+            //use the triangle layout we created
+            builder
+                .set_pipeline_layout(triangle_pl)
+            //connecting the vertex and pixel shaders to the pipeline
+                .set_shaders(colored_tri_vert_sm, colored_tri_frag_sm)
+            //it will draw triangles
+                .set_input_topology(api::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+            //filled triangles
+                .set_polygon_mode(api::VK_POLYGON_MODE_FILL)
+            //no backface culling
+                .set_cull_mode(api::VK_CULL_MODE_NONE, api::VK_FRONT_FACE_CLOCKWISE)
+            //no multisampling
+                .set_multisampling_none()
+            //no blending
+                .disable_blending()
+            //no depth testing
+                .disable_depth_test()
+            //connect the image format we will draw into, from draw image
+                .set_color_attachment_format(scene_image.format)
+                .set_depth_format(api::VK_FORMAT_UNDEFINED);
+
+            //finally build the pipeline
+            builder.build(&device)
+        };
+
+        device.destroy_shader_module(colored_tri_vert_sm);
+        device.destroy_shader_module(colored_tri_frag_sm);
 
         return RenderSystem{
             device,
@@ -226,11 +294,32 @@ impl RenderSystem {
             draw_image_ds,
             gradient_pl,
             gradient_p,
+            triangle_pl,
+            triangle_p,
         };
     }
 
     fn get_frame_data(&self) -> Rc<PerFrameData> {
         self.frame_data[self.swapchain.frame_index].clone()
+    }
+
+    fn draw_geometry(&self, cmd_buffer: &mut CommandBuffer) {
+        let color_attachment = make_color_attachment_info(self.scene_image.view, None, api::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+        //VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
+        //vkCmdBeginRendering(cmd, &renderInfo);
+
+        let draw_extent = api::VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
+        let render_info = make_rendering_info(draw_extent, &color_attachment, std::ptr::null());
+
+        cmd_buffer.begin_rendering(render_info);
+
+        cmd_buffer.bind_graphics_pipeline(self.triangle_p);
+        cmd_buffer.set_viewport(draw_extent.width, draw_extent.height, 0, 0);
+        cmd_buffer.set_scissor(draw_extent.width, draw_extent.height);
+        cmd_buffer.draw(3, 1, 0, 0);
+
+        cmd_buffer.end_rendering();
     }
 
     pub fn render(&mut self, _command_buffer: RenderCommandBuffer) {
@@ -269,10 +358,6 @@ impl RenderSystem {
 
         command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_UNDEFINED, api::VK_IMAGE_LAYOUT_GENERAL);
 
-        let swapchain_image = self.swapchain.get_swapchain_image();
-        let swapchain_extent = self.swapchain.get_extent();
-
-
         { // Draw background
             //command_buffer.clear_color_image(self.scene_image.image, &clear_value);
 
@@ -287,10 +372,17 @@ impl RenderSystem {
             command_buffer.dispatch_compute(group_x.ceil() as u32, group_y.ceil() as u32, 1);
         }
 
-        // Now, copy the scene framebuffer to the swapchain
+        { // Draw geometry
+           	command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_GENERAL, api::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            self.draw_geometry(&mut command_buffer);
+        }
 
-        command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_GENERAL,   api::VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        command_buffer.transition_image(swapchain_image,        api::VK_IMAGE_LAYOUT_UNDEFINED, api::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        // Now, copy the scene framebuffer to the swapchain
+        let swapchain_image  = self.swapchain.get_swapchain_image();
+        let swapchain_extent = self.swapchain.get_extent();
+
+        command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, api::VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        command_buffer.transition_image(swapchain_image,        api::VK_IMAGE_LAYOUT_UNDEFINED,                api::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         let src_extent = api::VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
         let dst_extent = api::VkExtent2D{ width: swapchain_extent.width,      height: swapchain_extent.height      };
@@ -335,6 +427,9 @@ impl RenderSystem {
 
     pub fn destroy(&mut self) {
         self.device.wait_idle();
+
+        self.device.destroy_pipeline(self.triangle_p);
+        self.device.destroy_pipeline_layout(self.triangle_pl);
 
         self.device.destroy_pipeline(self.gradient_p);
         self.device.destroy_pipeline_layout(self.gradient_pl);

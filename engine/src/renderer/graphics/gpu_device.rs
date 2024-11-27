@@ -505,6 +505,7 @@ impl Gpu {
         // Make sure the gpu supports all required extensions
         let mut swapchain_extension_found = false;
         let mut semaphore_timelines_found = false;
+        let mut dynamic_rendering_found   = false;
 
         let extensions = instance.inst_fns.enumerate_device_extensions(gpu);
         for extension in extensions {
@@ -512,14 +513,14 @@ impl Gpu {
 
             if ext_c_str == byte_array_as_cstr!(VK_KHR_SWAPCHAIN_EXTENSION_NAME) {
                 swapchain_extension_found = true;
-            } else if ext_c_str
-                == byte_array_as_cstr!(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME)
-            {
+            } else if ext_c_str == byte_array_as_cstr!(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) {
                 semaphore_timelines_found = true;
+            } else if ext_c_str == byte_array_as_cstr!(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) {
+                dynamic_rendering_found = true;
             }
         }
 
-        if !swapchain_extension_found || !semaphore_timelines_found {
+        if !swapchain_extension_found || !semaphore_timelines_found || !dynamic_rendering_found {
             // could not find required extensions
             println!("Could not find required extensions");
             return false;
@@ -732,10 +733,17 @@ impl Device {
         //   - Device Address (allows for direct GPU access)
         //   - Synchronization2
         //   - Timeline Semaphores
+        //   - Dynamic Rendering
         use core::ffi::c_void;
+
+        let mut feature_dyn_rendering = VkPhysicalDeviceDynamicRenderingFeatures::default(); //VK_KHR_dynamic_rendering
+        feature_dyn_rendering.dynamicRendering = VK_TRUE;
+
+        let feature_dyn_rendering_ptr: *mut VkPhysicalDeviceDynamicRenderingFeatures = &mut feature_dyn_rendering;
 
         let mut feature_device_addr = VkPhysicalDeviceBufferDeviceAddressFeatures::default();
         feature_device_addr.bufferDeviceAddress = VK_TRUE;
+        feature_device_addr.pNext = feature_dyn_rendering_ptr as *mut c_void;
 
         let feature_device_addr_ptr: *mut VkPhysicalDeviceBufferDeviceAddressFeatures = &mut feature_device_addr;
 
@@ -1223,7 +1231,12 @@ impl Device {
             cmd_blit_image2:          self.fns.cmd_blit_image2,
             cmd_bind_pipeline:        self.fns.cmd_bind_pipeline,
             cmd_bind_descriptor_sets: self.fns.cmd_bind_descriptor_sets,
-            cmd_dispatch:             self.fns.cmd_dispatch
+            cmd_dispatch:             self.fns.cmd_dispatch,
+            cmd_begin_rendering:      self.fns.cmd_begin_rendering,
+            cmd_end_rendering:        self.fns.cmd_end_rendering,
+            cmd_set_scissor:          self.fns.cmd_set_scissor,
+            cmd_set_viewport:         self.fns.cmd_set_viewport,
+            cmd_draw:                 self.fns.cmd_draw,
         };
 
         return CommandBuffer::new(fn_table, unsafe { buffer.assume_init() });
@@ -1482,6 +1495,16 @@ impl Device {
 
         let mut pipeline: MaybeUninit<_> = MaybeUninit::<VkPipeline>::uninit();
         call_throw!(self.fns.create_compute_pipeline, self.handle, pipeline_cache, 1, &pipeline_ci, ptr::null(), pipeline.as_mut_ptr());
+
+        return unsafe { pipeline.assume_init() };
+    }
+
+    // the graphics pipeline just requires so many inputs, so pass in the create info struct instead of trying to pass fields as parameters
+    pub fn create_graphics_pipeline(&self, pipeline_ci: VkGraphicsPipelineCreateInfo) -> VkPipeline {
+        let pipeline_cache: VkPipelineCache = ptr::null_mut(); //todo: support pipeline caches
+
+        let mut pipeline: MaybeUninit<_> = MaybeUninit::<VkPipeline>::uninit();
+        call_throw!(self.fns.create_graphics_pipeline, self.handle, pipeline_cache, 1, &pipeline_ci, ptr::null(), pipeline.as_mut_ptr());
 
         return unsafe { pipeline.assume_init() };
     }

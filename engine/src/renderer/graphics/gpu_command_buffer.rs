@@ -13,6 +13,11 @@ pub struct CommandBufferFnTable {
     pub cmd_bind_pipeline:        FN_vkCmdBindPipeline,
     pub cmd_bind_descriptor_sets: FN_vkCmdBindDescriptorSets,
     pub cmd_dispatch:             FN_vkCmdDispatch,
+    pub cmd_begin_rendering:      FN_vkCmdBeginRendering,
+    pub cmd_end_rendering:        FN_vkCmdEndRendering,
+    pub cmd_set_scissor:          FN_vkCmdSetScissor,
+    pub cmd_set_viewport:         FN_vkCmdSetViewport,
+    pub cmd_draw:                 FN_vkCmdDraw
 }
 
 #[derive(PartialEq)]
@@ -166,6 +171,8 @@ impl CommandBuffer {
     }
 
     pub fn bind_compute_pipeline(&mut self, pipeline: VkPipeline) {
+        assert!(self.state == CommandBufferState::Open);
+
         if self.bound_pipeline != pipeline {
             self.bound_pipeline = pipeline;
         }
@@ -173,7 +180,19 @@ impl CommandBuffer {
         call!(self.fns.cmd_bind_pipeline, self.handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
     }
 
+    pub fn bind_graphics_pipeline(&mut self, pipeline: VkPipeline) {
+        assert!(self.state == CommandBufferState::Open);
+
+        if self.bound_pipeline != pipeline {
+            self.bound_pipeline = pipeline;
+        }
+
+        call!(self.fns.cmd_bind_pipeline, self.handle, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    }
+
     pub fn bind_compute_descriptor_sets(&mut self, pipeline_layout: VkPipelineLayout, first_set: u32, descriptor_sets: &[VkDescriptorSet]) {
+        assert!(self.state == CommandBufferState::Open);
+
         //todo: dynamic descriptor sets
 
         call!(self.fns.cmd_bind_descriptor_sets, self.handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, first_set,
@@ -181,6 +200,49 @@ impl CommandBuffer {
     }
 
     pub fn dispatch_compute(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        assert!(self.state == CommandBufferState::Open);
         call!(self.fns.cmd_dispatch, self.handle, group_count_x, group_count_y, group_count_z);
+    }
+
+    pub fn begin_rendering(&self, render_info: VkRenderingInfo) {
+        assert!(self.state == CommandBufferState::Open);
+        call!(self.fns.cmd_begin_rendering, self.handle, &render_info);
+    }
+
+    pub fn end_rendering(&self) {
+        assert!(self.state == CommandBufferState::Open);
+        call!(self.fns.cmd_end_rendering, self.handle);
+    }
+
+    pub fn set_viewport(&self, width: u32, height: u32, offset_x: u32, offset_y: u32) {
+        assert!(self.state == CommandBufferState::Open);
+
+        let viewport = VkViewport{
+            x:        offset_x as f32,
+            y:        offset_y as f32,
+            width:    width    as f32,
+            height:   height   as f32,
+            minDepth: 0.0,
+            maxDepth: 1.0,
+        };
+
+        call!(self.fns.cmd_set_viewport, self.handle, 0, 1, &viewport);
+    }
+
+    pub fn set_scissor(&self, width: u32, height: u32) {
+        assert!(self.state == CommandBufferState::Open);
+
+        let mut scissor = VkRect2D::default();
+    	scissor.offset.x      = 0;
+    	scissor.offset.y      = 0;
+    	scissor.extent.width  = width;
+    	scissor.extent.height = height;
+
+    	call!(self.fns.cmd_set_scissor, self.handle, 0, 1, &scissor);
+    }
+
+    pub fn draw(&self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) {
+        assert!(self.state == CommandBufferState::Open);
+        call!(self.fns.cmd_draw, self.handle, vertex_count, instance_count, first_vertex, first_instance);
     }
 }

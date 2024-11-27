@@ -301,6 +301,11 @@ pub struct DeviceFnTable
     pub cmd_bind_pipeline:               FN_vkCmdBindPipeline,
     pub cmd_bind_descriptor_sets:        FN_vkCmdBindDescriptorSets,
     pub cmd_dispatch:                    FN_vkCmdDispatch,
+    pub cmd_begin_rendering:             FN_vkCmdBeginRendering,
+    pub cmd_end_rendering:               FN_vkCmdEndRendering,
+    pub cmd_set_scissor:                 FN_vkCmdSetScissor,
+    pub cmd_set_viewport:                FN_vkCmdSetViewport,
+    pub cmd_draw:                        FN_vkCmdDraw,
 }
 
 /* ======================================================================== */
@@ -498,6 +503,11 @@ pub fn load_device_functions(gbl: &GlobalFnTable, inst: VkInstance, device: VkDe
         cmd_bind_pipeline:               get_device_procaddr!(vkCmdBindPipeline),
         cmd_bind_descriptor_sets:        get_device_procaddr!(vkCmdBindDescriptorSets),
         cmd_dispatch:                    get_device_procaddr!(vkCmdDispatch),
+        cmd_begin_rendering:             get_device_procaddr!(vkCmdBeginRendering),
+        cmd_end_rendering:               get_device_procaddr!(vkCmdEndRendering),
+        cmd_set_scissor:                 get_device_procaddr!(vkCmdSetScissor),
+        cmd_set_viewport:                get_device_procaddr!(vkCmdSetViewport),
+        cmd_draw:                        get_device_procaddr!(vkCmdDraw)
     };
 
     Ok(funcs)
@@ -636,4 +646,45 @@ pub fn make_image_view_ci(format: VkFormat, image: VkImage, aspect_flags: VkImag
             layerCount:     1,
         },
     };
+}
+
+#[inline(always)]
+pub fn make_color_attachment_info(view: VkImageView, clear: Option<VkClearValue>, layout: VkImageLayout) -> VkRenderingAttachmentInfo {
+    let mut attachment_info = VkRenderingAttachmentInfo::default();
+    attachment_info.imageView   = view;
+    attachment_info.imageLayout = layout;
+    attachment_info.loadOp      = if clear.is_some() { VK_ATTACHMENT_LOAD_OP_CLEAR } else { VK_ATTACHMENT_LOAD_OP_LOAD };
+    attachment_info.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment_info.clearValue  = if let Some(c) = clear { c } else { Default::default() };
+
+    return attachment_info;
+}
+
+#[inline(always)]
+pub fn make_depth_attachment_info(view: VkImageView, layout: VkImageLayout) -> VkRenderingAttachmentInfo {
+    let mut attachment_info = VkRenderingAttachmentInfo::default();
+    attachment_info.imageView   = view;
+    attachment_info.imageLayout = layout;
+    attachment_info.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachment_info.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment_info.clearValue  = VkClearValue{
+        depthStencil: VkClearDepthStencilValue{
+            depth:   0.0,
+            stencil: 0,
+        },
+    };
+
+    return attachment_info;
+}
+
+#[inline(always)]
+pub fn make_rendering_info(render_extent: VkExtent2D, color_attachment: *const VkRenderingAttachmentInfo, depth_attachment: *const VkRenderingAttachmentInfo) -> VkRenderingInfo {
+    let mut render_info = VkRenderingInfo::default();
+    render_info.renderArea           = VkRect2D{ offset: VkOffset2D::default(), extent: render_extent };
+    render_info.layerCount           = 1;
+    render_info.colorAttachmentCount = 1;
+    render_info.pColorAttachments    = color_attachment;
+    render_info.pDepthAttachment     = depth_attachment;;
+
+    return render_info;
 }
