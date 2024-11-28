@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-include!(concat!(env!("OUT_DIR"), "/vulkan_bindings.rs"));
+include!("vulkan_bindings.rs");
 
 pub const VK_API_VERSION_1_1: u32 = 1u32 << 22u32 | 1u32 << 12u32;
 pub const VK_API_VERSION_1_2: u32 = 1u32 << 22u32 | 2u32 << 12u32;

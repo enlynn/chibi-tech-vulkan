@@ -1,10 +1,8 @@
 use std::{ffi::CString, os::raw};
 
-mod api;
-
-use api::*;
-
 use crate::window::WaylandSurface;
+
+use vendor::glfw::*;
 
 pub struct WindowSystem
 {

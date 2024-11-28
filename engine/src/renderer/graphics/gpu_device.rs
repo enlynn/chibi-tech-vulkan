@@ -1,7 +1,7 @@
 use crate::util::ffi::*;
 use crate::window::NativeSurface;
 
-use super::api::*;
+use vendor::vulkan::*;
 use super::consts;
 use super::gpu_device_context as context;
 use super::gpu_swapchain::{Swapchain, SwapchainFnTable};

@@ -4,6 +4,8 @@
 #![feature(concat_idents)]
 #![feature(stmt_expr_attributes)]
 
+extern crate vendor;
+
 mod window;
 mod renderer;
 mod math;

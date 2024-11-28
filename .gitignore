@@ -4,3 +4,5 @@ engine/vendor/vulkan/*.a
 engine/vendor/vulkan/*.o
 
 /engine/assets/shaders/.cache
+/vendor/src/glfw/cpp
+/vendor/bin

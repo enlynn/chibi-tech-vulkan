@@ -1,6 +1,5 @@
 mod graphics;
 
-use api::{VkDescriptorSetLayout, VkExtent3D};
 use graphics::*;
 use graphics::{
     AllocatedImage,
@@ -19,6 +18,8 @@ use std::borrow::BorrowMut;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::str::FromStr;
+
+use vendor::vulkan::*;
 
 #[derive(Clone, Copy)]
 pub enum RenderCommand{
@@ -70,19 +71,17 @@ pub struct RenderSystem{
     frame_data:  Vec<Rc<PerFrameData>>,
     frame_index: usize,
 
-    silly: usize,
-
     global_da:     DescriptorAllocator,
-    draw_image_dl: api::VkDescriptorSetLayout,
-	draw_image_ds: api::VkDescriptorSet,
+    draw_image_dl: VkDescriptorSetLayout,
+    draw_image_ds: VkDescriptorSet,
 
 	// for the background
-	gradient_pl:   api::VkPipelineLayout,
-	gradient_p:    api::VkPipeline,
+	gradient_pl:   VkPipelineLayout,
+	gradient_p:    VkPipeline,
 
 	// for the triangle
-	triangle_pl:   api::VkPipelineLayout,
-	triangle_p:    api::VkPipeline,
+	triangle_pl:   VkPipelineLayout,
+	triangle_p:    VkPipeline,
 }
 
 enum ShaderStage {
@@ -91,7 +90,7 @@ enum ShaderStage {
     Compute,
 }
 
-fn load_shader_module(device: &Device, shader_name: &str, stage: ShaderStage) -> api::VkShaderModule {
+fn load_shader_module(device: &Device, shader_name: &str, stage: ShaderStage) -> VkShaderModule {
     use crate::core::asset_system::{AssetDrive, AssetSystem};
     use std::io::prelude::*;
     use std::fs::File;
@@ -131,19 +130,19 @@ fn load_shader_module(device: &Device, shader_name: &str, stage: ShaderStage) ->
 
 impl RenderSystem {
     fn create_scene_images(device: &Device, extent: VkExtent3D) -> AllocatedImage {
-        let image_usages: api::VkImageUsageFlags =
-            api::VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            api::VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-            api::VK_IMAGE_USAGE_STORAGE_BIT      |
-            api::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        let image_usages: VkImageUsageFlags =
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+            VK_IMAGE_USAGE_STORAGE_BIT      |
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
         device.allocate_image_memory(
             extent,
-            api::VK_FORMAT_R16G16B16A16_SFLOAT,
+            VK_FORMAT_R16G16B16A16_SFLOAT,
             image_usages,
-            api::VMA_MEMORY_USAGE_GPU_ONLY,
-            api::VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            api::VK_IMAGE_ASPECT_COLOR_BIT)
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT)
     }
 
     fn resize_device_resources(&mut self) {
@@ -159,11 +158,11 @@ impl RenderSystem {
         self.draw_image_ds = {
             let ds = self.device.allocate_descriptors(&self.global_da, self.draw_image_dl);
 
-            let mut image_info = api::VkDescriptorImageInfo::default();
-            image_info.imageLayout = api::VK_IMAGE_LAYOUT_GENERAL;
+            let mut image_info = VkDescriptorImageInfo::default();
+            image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             image_info.imageView   = self.scene_image.view;
 
-            self.device.update_descriptor_sets(image_info, ds, 1, 0, 0, api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            self.device.update_descriptor_sets(image_info, ds, 1, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
             ds
         };
@@ -197,7 +196,7 @@ impl RenderSystem {
 
         let global_da = {
             let sizes: [PoolSizeRatio; 1] = [
-                PoolSizeRatio{descriptor_type: api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, ratio: 1.0 },
+                PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, ratio: 1.0 },
             ];
 
             device.create_descriptor_allocator(10, sizes.as_slice())
@@ -205,19 +204,19 @@ impl RenderSystem {
 
         let draw_image_dl = {
             let mut builder = DescriptorLayoutBuilder::new();
-            builder.add_binding(0, api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
-            builder.build(&device, api::VK_SHADER_STAGE_COMPUTE_BIT, 0)
+            builder.build(&device, VK_SHADER_STAGE_COMPUTE_BIT, 0)
         };
 
         let draw_image_ds = {
             let ds = device.allocate_descriptors(&global_da, draw_image_dl);
 
-            let mut image_info = api::VkDescriptorImageInfo::default();
-            image_info.imageLayout = api::VK_IMAGE_LAYOUT_GENERAL;
+            let mut image_info = VkDescriptorImageInfo::default();
+            image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
             image_info.imageView   = scene_image.view;
 
-            device.update_descriptor_sets(image_info, ds, 1, 0, 0, api::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            device.update_descriptor_sets(image_info, ds, 1, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
             ds
         };
@@ -228,8 +227,8 @@ impl RenderSystem {
         let gradient_sm = load_shader_module(&device, "gradient", ShaderStage::Compute);
 
         let gradient_pl = {
-            let descriptors:    [api::VkDescriptorSetLayout; 1] = [ draw_image_dl ];
-            let push_constants: [api::VkPushConstantRange; 0]   = [];
+            let descriptors:    [VkDescriptorSetLayout; 1] = [ draw_image_dl ];
+            let push_constants: [VkPushConstantRange; 0]   = [];
 
             device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
         };
@@ -245,8 +244,8 @@ impl RenderSystem {
         let colored_tri_frag_sm = load_shader_module(&device, "colored_triangle", ShaderStage::Fragment);
 
         let triangle_pl = {
-            let descriptors:    [api::VkDescriptorSetLayout; 0] = [];
-            let push_constants: [api::VkPushConstantRange;   0] = [];
+            let descriptors:    [VkDescriptorSetLayout; 0] = [];
+            let push_constants: [VkPushConstantRange;   0] = [];
 
             device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
         };
@@ -260,11 +259,11 @@ impl RenderSystem {
             //connecting the vertex and pixel shaders to the pipeline
                 .set_shaders(colored_tri_vert_sm, colored_tri_frag_sm)
             //it will draw triangles
-                .set_input_topology(api::VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
             //filled triangles
-                .set_polygon_mode(api::VK_POLYGON_MODE_FILL)
+                .set_polygon_mode(VK_POLYGON_MODE_FILL)
             //no backface culling
-                .set_cull_mode(api::VK_CULL_MODE_NONE, api::VK_FRONT_FACE_CLOCKWISE)
+                .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
             //no multisampling
                 .set_multisampling_none()
             //no blending
@@ -273,7 +272,7 @@ impl RenderSystem {
                 .disable_depth_test()
             //connect the image format we will draw into, from draw image
                 .set_color_attachment_format(scene_image.format)
-                .set_depth_format(api::VK_FORMAT_UNDEFINED);
+                .set_depth_format(VK_FORMAT_UNDEFINED);
 
             //finally build the pipeline
             builder.build(&device)
@@ -288,7 +287,6 @@ impl RenderSystem {
             scene_image,
             frame_data,
             frame_index: 0,
-            silly: 0,
             global_da,
             draw_image_dl,
             draw_image_ds,
@@ -304,12 +302,9 @@ impl RenderSystem {
     }
 
     fn draw_geometry(&self, cmd_buffer: &mut CommandBuffer) {
-        let color_attachment = make_color_attachment_info(self.scene_image.view, None, api::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        let color_attachment = make_color_attachment_info(self.scene_image.view, None, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-        //VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
-        //vkCmdBeginRendering(cmd, &renderInfo);
-
-        let draw_extent = api::VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
+        let draw_extent = VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
         let render_info = make_rendering_info(draw_extent, &color_attachment, std::ptr::null());
 
         cmd_buffer.begin_rendering(render_info);
@@ -342,12 +337,6 @@ impl RenderSystem {
         // Render the Frame
         //
 
-        self.silly += 1;
-        let flash:  f32 = f32::sin((self.silly as f32) / 6000.0).abs();
-        let flash2: f32 = f32::cos((self.silly as f32) / 6000.0).abs();
-        let flash3: f32 = f32::tan((self.silly as f32) / 6000.0).abs();
-        let clear_value = api::VkClearColorValue{ float32: [flash2, flash3, flash, 1.0] };
-
         let frame_data  = self.get_frame_data();
         let mut frame_state = frame_data.state.borrow_mut();
 
@@ -356,14 +345,14 @@ impl RenderSystem {
         command_buffer.reset();
         command_buffer.begin_recording();
 
-        command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_UNDEFINED, api::VK_IMAGE_LAYOUT_GENERAL);
+        command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         { // Draw background
             //command_buffer.clear_color_image(self.scene_image.image, &clear_value);
 
             command_buffer.bind_compute_pipeline(self.gradient_p);
 
-            let descriptors: [api::VkDescriptorSet; 1] = [ self.draw_image_ds ];
+            let descriptors: [VkDescriptorSet; 1] = [ self.draw_image_ds ];
             command_buffer.bind_compute_descriptor_sets(self.gradient_pl, 0, descriptors.as_slice());
 
             let group_x = self.scene_image.dims.width  as f32 / 16.0;
@@ -373,7 +362,7 @@ impl RenderSystem {
         }
 
         { // Draw geometry
-           	command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_GENERAL, api::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
             self.draw_geometry(&mut command_buffer);
         }
 
@@ -381,16 +370,16 @@ impl RenderSystem {
         let swapchain_image  = self.swapchain.get_swapchain_image();
         let swapchain_extent = self.swapchain.get_extent();
 
-        command_buffer.transition_image(self.scene_image.image, api::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, api::VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        command_buffer.transition_image(swapchain_image,        api::VK_IMAGE_LAYOUT_UNDEFINED,                api::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        command_buffer.transition_image(swapchain_image,        VK_IMAGE_LAYOUT_UNDEFINED,                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        let src_extent = api::VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
-        let dst_extent = api::VkExtent2D{ width: swapchain_extent.width,      height: swapchain_extent.height      };
+        let src_extent = VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
+        let dst_extent = VkExtent2D{ width: swapchain_extent.width,      height: swapchain_extent.height      };
 
         command_buffer.copy_image_to_image(self.scene_image.image, src_extent, swapchain_image, dst_extent);
 
         // Transition the swapchain image to present mode
-        command_buffer.transition_image(swapchain_image, api::VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, api::VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        command_buffer.transition_image(swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         // End the Frame
         //
@@ -403,9 +392,9 @@ impl RenderSystem {
         let present_sem = self.swapchain.get_present_semaphore();
 
         // Want to wait on the PresentSemaphore, as that semaphore is signaled when the swapchain is ready
-        let wait_info   = make_semaphore_submit_info(api::VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, present_sem);
+        let wait_info   = make_semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, present_sem);
         // Will signal the renderSemaphore, to signal that rendering has finished
-        let signal_info = make_semaphore_submit_info(api::VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, render_sem);
+        let signal_info = make_semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, render_sem);
 
         let submit = make_submit_info(cmd_buffer_si, Some(signal_info), Some(wait_info));
 

@@ -3,7 +3,7 @@ use std::ptr;
 use crate::core::os;
 use crate::util::ffi::*;
 
-use super::api::*;
+use vendor::vulkan::*;
 use super::consts;
 
 /* ======================================================================== */

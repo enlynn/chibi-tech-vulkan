@@ -1,5 +1,5 @@
 
-use super::api::*;
+use vendor::vulkan::*;
 
 pub struct CommandPoolFnTable {
 

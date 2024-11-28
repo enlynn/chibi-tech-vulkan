@@ -1,4 +1,4 @@
-use super::api;
+use vendor::vulkan as api;
 use super::gpu_device as device;
 
 /// Enabling validation layers will enable further error reporting from Vulkan, but can degrade performance.

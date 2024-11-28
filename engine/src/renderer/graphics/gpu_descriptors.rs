@@ -1,4 +1,4 @@
-use super::api::*;
+use vendor::vulkan::*;
 use super::gpu_device::Device;
 
 pub struct DescriptorLayoutBuilder {

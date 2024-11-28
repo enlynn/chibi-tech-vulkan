@@ -5,7 +5,12 @@ edition = "2021"
 resolver="2"
 
 [dependencies]
-rand = { version = "0.8.5" }
+rand   = { version = "0.8.5" }
+
+[dependencies.vendor]
+path="../vendor"
+#features = ["generator"]
+
 
 [build-dependencies]
 bindgen = "0.65.1"

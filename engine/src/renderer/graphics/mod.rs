@@ -1,5 +1,4 @@
 
-pub mod api;
 pub mod consts;
 pub mod gpu_utils;
 
@@ -10,6 +9,8 @@ pub mod gpu_command_pool;
 pub mod gpu_command_buffer;
 pub mod gpu_descriptors;
 pub mod gpu_pipeline;
+
+use vendor::vulkan as api;
 
 pub type Semaphore         = api::VkSemaphore;
 pub type TimelineSemaphore = api::VkSemaphore;

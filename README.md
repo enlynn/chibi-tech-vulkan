@@ -40,6 +40,7 @@ TODO: It is planned to included GLFW by default.
 
 # TODO
 
+- Pull vendor libs that require generating bindings into their own crate in hopes of reducing compile time when we need to run the build script.
 - Vulkan Setup
 -- Convert old C++ code to Rust
 -- Road to the Vulkan Triangle

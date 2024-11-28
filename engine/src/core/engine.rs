@@ -4,6 +4,8 @@ use std::cell::RefCell;
 use crate::window;
 use crate::renderer;
 
+use vendor::imgui::*;
+
 pub trait Game {
     fn on_init(&mut self)     -> bool;
     fn on_update(&mut self)   -> bool;
@@ -39,6 +41,8 @@ impl Engine {
 
         let (width, height) = client_window.get_framebuffer_size();
         render_system.on_resize(width, height);
+
+        let ig_ctx = unsafe { igCreateContext(std::ptr::null_mut()) };
 
         return Engine{
             game,

@@ -1,6 +1,6 @@
 use crate::util::ffi::call;
 
-use super::api::*;
+use vendor::vulkan::*;
 use super::gpu_utils::*;
 use super::gpu_device::Device;
 

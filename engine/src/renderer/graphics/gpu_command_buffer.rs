@@ -1,7 +1,8 @@
 use crate::util::ffi::call;
 
-use super::api::*;
 use super::gpu_utils::*;
+
+use vendor::vulkan::*;
 
 pub struct CommandBufferFnTable {
     pub begin_command_buffer:     FN_vkBeginCommandBuffer,
