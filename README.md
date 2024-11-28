@@ -17,14 +17,13 @@ As this project is written in Rust, users must have Rust installed. Follow the i
 
 User must install the [Vulkan SDK](https://vulkan.lunarg.com/) onto their system. Correct version headers are included with this repo.
 
-TODO: It is planned to fetch the Vulkan library by default.
-
 ### GLFW
 
-User must install GLFW to their system by following these [instructions](https://www.glfw.org/download). GLFW headers are included with this repo.
-I have prototyped fetching and building GLFW using the script, `scripts/setup_deps.sh`, but it is not currently hooked into the build system (yet).
+GLFW is used for its cross-platform windowing system. Custom binaries are built on first compilation using the `vendor/` crate.
 
-TODO: It is planned to included GLFW by default.
+### IMGUI
+
+GLFW is used for its immediate mode GUI. Custom binaries are built on first compilation using the `vendor/` crate.
 
 # Build Instructions
 
