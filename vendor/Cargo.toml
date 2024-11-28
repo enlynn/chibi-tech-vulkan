@@ -5,14 +5,13 @@ edition = "2021"
 resolver="2"
 
 [build-dependencies]
-bindgen = "0.65.1"
+bindgen = { version = "0.65.1", optional = true }
 
 [target.'cfg(target_os = "linux")'.build-dependencies]
-pkg-config = "0.3"
+pkg-config = { version = "0.3", optional = true }
 
 [lib]
 path = "src/lib.rs"
 
 [features]
-# Defines a feature named `webp` that does not enable any other features.
-generator = []
+generator = ["dep:bindgen", "dep:pkg-config"]

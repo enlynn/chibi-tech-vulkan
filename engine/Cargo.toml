@@ -5,18 +5,11 @@ edition = "2021"
 resolver="2"
 
 [dependencies]
-rand   = { version = "0.8.5" }
+rand = { version = "0.8.5" }
 
 [dependencies.vendor]
 path="../vendor"
 #features = ["generator"]
-
-
-[build-dependencies]
-bindgen = "0.65.1"
-
-[target.'cfg(target_os = "linux")'.build-dependencies]
-pkg-config = "0.3"
 
 [lib]
 path = "src/lib.rs"
