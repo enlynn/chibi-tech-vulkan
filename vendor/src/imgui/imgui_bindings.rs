@@ -27051,6 +27051,469 @@ extern "C" {
     ) -> *mut ImGuiViewport;
 }
 extern "C" {
+    pub fn ImGuiTableSortSpecs_ImGuiTableSortSpecs() -> *mut ImGuiTableSortSpecs;
+}
+extern "C" {
+    pub fn ImGuiTableSortSpecs_destroy(self_: *mut ImGuiTableSortSpecs);
+}
+extern "C" {
+    pub fn ImGuiTableColumnSortSpecs_ImGuiTableColumnSortSpecs() -> *mut ImGuiTableColumnSortSpecs;
+}
+extern "C" {
+    pub fn ImGuiTableColumnSortSpecs_destroy(self_: *mut ImGuiTableColumnSortSpecs);
+}
+extern "C" {
+    pub fn ImGuiStyle_ImGuiStyle() -> *mut ImGuiStyle;
+}
+extern "C" {
+    pub fn ImGuiStyle_destroy(self_: *mut ImGuiStyle);
+}
+extern "C" {
+    pub fn ImGuiStyle_ScaleAllSizes(self_: *mut ImGuiStyle, scale_factor: f32);
+}
+extern "C" {
+    pub fn ImGuiIO_AddKeyEvent(self_: *mut ImGuiIO, key: ImGuiKey, down: bool);
+}
+extern "C" {
+    pub fn ImGuiIO_AddKeyAnalogEvent(self_: *mut ImGuiIO, key: ImGuiKey, down: bool, v: f32);
+}
+extern "C" {
+    pub fn ImGuiIO_AddMousePosEvent(self_: *mut ImGuiIO, x: f32, y: f32);
+}
+extern "C" {
+    pub fn ImGuiIO_AddMouseButtonEvent(
+        self_: *mut ImGuiIO,
+        button: ::std::os::raw::c_int,
+        down: bool,
+    );
+}
+extern "C" {
+    pub fn ImGuiIO_AddMouseWheelEvent(self_: *mut ImGuiIO, wheel_x: f32, wheel_y: f32);
+}
+extern "C" {
+    pub fn ImGuiIO_AddMouseSourceEvent(self_: *mut ImGuiIO, source: ImGuiMouseSource);
+}
+extern "C" {
+    pub fn ImGuiIO_AddMouseViewportEvent(self_: *mut ImGuiIO, id: ImGuiID);
+}
+extern "C" {
+    pub fn ImGuiIO_AddFocusEvent(self_: *mut ImGuiIO, focused: bool);
+}
+extern "C" {
+    pub fn ImGuiIO_AddInputCharacter(self_: *mut ImGuiIO, c: ::std::os::raw::c_uint);
+}
+extern "C" {
+    pub fn ImGuiIO_AddInputCharacterUTF16(self_: *mut ImGuiIO, c: ImWchar16);
+}
+extern "C" {
+    pub fn ImGuiIO_AddInputCharactersUTF8(self_: *mut ImGuiIO, str_: *const ::std::os::raw::c_char);
+}
+extern "C" {
+    pub fn ImGuiIO_SetKeyEventNativeData(
+        self_: *mut ImGuiIO,
+        key: ImGuiKey,
+        native_keycode: ::std::os::raw::c_int,
+        native_scancode: ::std::os::raw::c_int,
+        native_legacy_index: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
+    pub fn ImGuiIO_SetAppAcceptingEvents(self_: *mut ImGuiIO, accepting_events: bool);
+}
+extern "C" {
+    pub fn ImGuiIO_ClearEventsQueue(self_: *mut ImGuiIO);
+}
+extern "C" {
+    pub fn ImGuiIO_ClearInputKeys(self_: *mut ImGuiIO);
+}
+extern "C" {
+    pub fn ImGuiIO_ClearInputMouse(self_: *mut ImGuiIO);
+}
+extern "C" {
+    pub fn ImGuiIO_ImGuiIO() -> *mut ImGuiIO;
+}
+extern "C" {
+    pub fn ImGuiIO_destroy(self_: *mut ImGuiIO);
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_ImGuiInputTextCallbackData() -> *mut ImGuiInputTextCallbackData;
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_destroy(self_: *mut ImGuiInputTextCallbackData);
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_DeleteChars(
+        self_: *mut ImGuiInputTextCallbackData,
+        pos: ::std::os::raw::c_int,
+        bytes_count: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_InsertChars(
+        self_: *mut ImGuiInputTextCallbackData,
+        pos: ::std::os::raw::c_int,
+        text: *const ::std::os::raw::c_char,
+        text_end: *const ::std::os::raw::c_char,
+    );
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_SelectAll(self_: *mut ImGuiInputTextCallbackData);
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_ClearSelection(self_: *mut ImGuiInputTextCallbackData);
+}
+extern "C" {
+    pub fn ImGuiInputTextCallbackData_HasSelection(self_: *mut ImGuiInputTextCallbackData) -> bool;
+}
+extern "C" {
+    pub fn ImGuiWindowClass_ImGuiWindowClass() -> *mut ImGuiWindowClass;
+}
+extern "C" {
+    pub fn ImGuiWindowClass_destroy(self_: *mut ImGuiWindowClass);
+}
+extern "C" {
+    pub fn ImGuiPayload_ImGuiPayload() -> *mut ImGuiPayload;
+}
+extern "C" {
+    pub fn ImGuiPayload_destroy(self_: *mut ImGuiPayload);
+}
+extern "C" {
+    pub fn ImGuiPayload_Clear(self_: *mut ImGuiPayload);
+}
+extern "C" {
+    pub fn ImGuiPayload_IsDataType(
+        self_: *mut ImGuiPayload,
+        type_: *const ::std::os::raw::c_char,
+    ) -> bool;
+}
+extern "C" {
+    pub fn ImGuiPayload_IsPreview(self_: *mut ImGuiPayload) -> bool;
+}
+extern "C" {
+    pub fn ImGuiPayload_IsDelivery(self_: *mut ImGuiPayload) -> bool;
+}
+extern "C" {
+    pub fn ImGuiOnceUponAFrame_ImGuiOnceUponAFrame() -> *mut ImGuiOnceUponAFrame;
+}
+extern "C" {
+    pub fn ImGuiOnceUponAFrame_destroy(self_: *mut ImGuiOnceUponAFrame);
+}
+extern "C" {
+    pub fn ImGuiTextFilter_ImGuiTextFilter(
+        default_filter: *const ::std::os::raw::c_char,
+    ) -> *mut ImGuiTextFilter;
+}
+extern "C" {
+    pub fn ImGuiTextFilter_destroy(self_: *mut ImGuiTextFilter);
+}
+extern "C" {
+    pub fn ImGuiTextFilter_Draw(
+        self_: *mut ImGuiTextFilter,
+        label: *const ::std::os::raw::c_char,
+        width: f32,
+    ) -> bool;
+}
+extern "C" {
+    pub fn ImGuiTextFilter_PassFilter(
+        self_: *mut ImGuiTextFilter,
+        text: *const ::std::os::raw::c_char,
+        text_end: *const ::std::os::raw::c_char,
+    ) -> bool;
+}
+extern "C" {
+    pub fn ImGuiTextFilter_Build(self_: *mut ImGuiTextFilter);
+}
+extern "C" {
+    pub fn ImGuiTextFilter_Clear(self_: *mut ImGuiTextFilter);
+}
+extern "C" {
+    pub fn ImGuiTextFilter_IsActive(self_: *mut ImGuiTextFilter) -> bool;
+}
+extern "C" {
+    pub fn ImGuiTextRange_ImGuiTextRange_Nil() -> *mut ImGuiTextRange;
+}
+extern "C" {
+    pub fn ImGuiTextRange_destroy(self_: *mut ImGuiTextRange);
+}
+extern "C" {
+    pub fn ImGuiTextRange_ImGuiTextRange_Str(
+        _b: *const ::std::os::raw::c_char,
+        _e: *const ::std::os::raw::c_char,
+    ) -> *mut ImGuiTextRange;
+}
+extern "C" {
+    pub fn ImGuiTextRange_empty(self_: *mut ImGuiTextRange) -> bool;
+}
+extern "C" {
+    pub fn ImGuiTextRange_split(
+        self_: *mut ImGuiTextRange,
+        separator: ::std::os::raw::c_char,
+        out: *mut ImVector_ImGuiTextRange,
+    );
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_ImGuiTextBuffer() -> *mut ImGuiTextBuffer;
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_destroy(self_: *mut ImGuiTextBuffer);
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_begin(self_: *mut ImGuiTextBuffer) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_end(self_: *mut ImGuiTextBuffer) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_size(self_: *mut ImGuiTextBuffer) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_empty(self_: *mut ImGuiTextBuffer) -> bool;
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_clear(self_: *mut ImGuiTextBuffer);
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_reserve(self_: *mut ImGuiTextBuffer, capacity: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_c_str(self_: *mut ImGuiTextBuffer) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_append(
+        self_: *mut ImGuiTextBuffer,
+        str_: *const ::std::os::raw::c_char,
+        str_end: *const ::std::os::raw::c_char,
+    );
+}
+extern "C" {
+    pub fn ImGuiTextBuffer_appendfv(
+        self_: *mut ImGuiTextBuffer,
+        fmt: *const ::std::os::raw::c_char,
+        args: *mut __va_list_tag,
+    );
+}
+extern "C" {
+    pub fn ImGuiStoragePair_ImGuiStoragePair_Int(
+        _key: ImGuiID,
+        _val: ::std::os::raw::c_int,
+    ) -> *mut ImGuiStoragePair;
+}
+extern "C" {
+    pub fn ImGuiStoragePair_destroy(self_: *mut ImGuiStoragePair);
+}
+extern "C" {
+    pub fn ImGuiStoragePair_ImGuiStoragePair_Float(
+        _key: ImGuiID,
+        _val: f32,
+    ) -> *mut ImGuiStoragePair;
+}
+extern "C" {
+    pub fn ImGuiStoragePair_ImGuiStoragePair_Ptr(
+        _key: ImGuiID,
+        _val: *mut ::std::os::raw::c_void,
+    ) -> *mut ImGuiStoragePair;
+}
+extern "C" {
+    pub fn ImGuiStorage_Clear(self_: *mut ImGuiStorage);
+}
+extern "C" {
+    pub fn ImGuiStorage_GetInt(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+        default_val: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiStorage_SetInt(self_: *mut ImGuiStorage, key: ImGuiID, val: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn ImGuiStorage_GetBool(self_: *mut ImGuiStorage, key: ImGuiID, default_val: bool) -> bool;
+}
+extern "C" {
+    pub fn ImGuiStorage_SetBool(self_: *mut ImGuiStorage, key: ImGuiID, val: bool);
+}
+extern "C" {
+    pub fn ImGuiStorage_GetFloat(self_: *mut ImGuiStorage, key: ImGuiID, default_val: f32) -> f32;
+}
+extern "C" {
+    pub fn ImGuiStorage_SetFloat(self_: *mut ImGuiStorage, key: ImGuiID, val: f32);
+}
+extern "C" {
+    pub fn ImGuiStorage_GetVoidPtr(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+    ) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn ImGuiStorage_SetVoidPtr(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+        val: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
+    pub fn ImGuiStorage_GetIntRef(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+        default_val: ::std::os::raw::c_int,
+    ) -> *mut ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiStorage_GetBoolRef(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+        default_val: bool,
+    ) -> *mut bool;
+}
+extern "C" {
+    pub fn ImGuiStorage_GetFloatRef(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+        default_val: f32,
+    ) -> *mut f32;
+}
+extern "C" {
+    pub fn ImGuiStorage_GetVoidPtrRef(
+        self_: *mut ImGuiStorage,
+        key: ImGuiID,
+        default_val: *mut ::std::os::raw::c_void,
+    ) -> *mut *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn ImGuiStorage_BuildSortByKey(self_: *mut ImGuiStorage);
+}
+extern "C" {
+    pub fn ImGuiStorage_SetAllInt(self_: *mut ImGuiStorage, val: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn ImGuiListClipper_ImGuiListClipper() -> *mut ImGuiListClipper;
+}
+extern "C" {
+    pub fn ImGuiListClipper_destroy(self_: *mut ImGuiListClipper);
+}
+extern "C" {
+    pub fn ImGuiListClipper_Begin(
+        self_: *mut ImGuiListClipper,
+        items_count: ::std::os::raw::c_int,
+        items_height: f32,
+    );
+}
+extern "C" {
+    pub fn ImGuiListClipper_End(self_: *mut ImGuiListClipper);
+}
+extern "C" {
+    pub fn ImGuiListClipper_Step(self_: *mut ImGuiListClipper) -> bool;
+}
+extern "C" {
+    pub fn ImGuiListClipper_IncludeItemByIndex(
+        self_: *mut ImGuiListClipper,
+        item_index: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
+    pub fn ImGuiListClipper_IncludeItemsByIndex(
+        self_: *mut ImGuiListClipper,
+        item_begin: ::std::os::raw::c_int,
+        item_end: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
+    pub fn ImGuiListClipper_SeekCursorForItem(
+        self_: *mut ImGuiListClipper,
+        item_index: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_ImGuiSelectionBasicStorage() -> *mut ImGuiSelectionBasicStorage;
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_destroy(self_: *mut ImGuiSelectionBasicStorage);
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_ApplyRequests(
+        self_: *mut ImGuiSelectionBasicStorage,
+        ms_io: *mut ImGuiMultiSelectIO,
+    );
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_Contains(
+        self_: *mut ImGuiSelectionBasicStorage,
+        id: ImGuiID,
+    ) -> bool;
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_Clear(self_: *mut ImGuiSelectionBasicStorage);
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_Swap(
+        self_: *mut ImGuiSelectionBasicStorage,
+        r: *mut ImGuiSelectionBasicStorage,
+    );
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_SetItemSelected(
+        self_: *mut ImGuiSelectionBasicStorage,
+        id: ImGuiID,
+        selected: bool,
+    );
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_GetNextSelectedItem(
+        self_: *mut ImGuiSelectionBasicStorage,
+        opaque_it: *mut *mut ::std::os::raw::c_void,
+        out_id: *mut ImGuiID,
+    ) -> bool;
+}
+extern "C" {
+    pub fn ImGuiSelectionBasicStorage_GetStorageIdFromIndex(
+        self_: *mut ImGuiSelectionBasicStorage,
+        idx: ::std::os::raw::c_int,
+    ) -> ImGuiID;
+}
+extern "C" {
+    pub fn ImGuiSelectionExternalStorage_ImGuiSelectionExternalStorage(
+    ) -> *mut ImGuiSelectionExternalStorage;
+}
+extern "C" {
+    pub fn ImGuiSelectionExternalStorage_destroy(self_: *mut ImGuiSelectionExternalStorage);
+}
+extern "C" {
+    pub fn ImGuiSelectionExternalStorage_ApplyRequests(
+        self_: *mut ImGuiSelectionExternalStorage,
+        ms_io: *mut ImGuiMultiSelectIO,
+    );
+}
+extern "C" {
+    pub fn ImGuiViewport_ImGuiViewport() -> *mut ImGuiViewport;
+}
+extern "C" {
+    pub fn ImGuiViewport_destroy(self_: *mut ImGuiViewport);
+}
+extern "C" {
+    pub fn ImGuiViewport_GetCenter(pOut: *mut ImVec2, self_: *mut ImGuiViewport);
+}
+extern "C" {
+    pub fn ImGuiViewport_GetWorkCenter(pOut: *mut ImVec2, self_: *mut ImGuiViewport);
+}
+extern "C" {
+    pub fn ImGuiPlatformIO_ImGuiPlatformIO() -> *mut ImGuiPlatformIO;
+}
+extern "C" {
+    pub fn ImGuiPlatformIO_destroy(self_: *mut ImGuiPlatformIO);
+}
+extern "C" {
+    pub fn ImGuiPlatformMonitor_ImGuiPlatformMonitor() -> *mut ImGuiPlatformMonitor;
+}
+extern "C" {
+    pub fn ImGuiPlatformMonitor_destroy(self_: *mut ImGuiPlatformMonitor);
+}
+extern "C" {
+    pub fn ImGuiPlatformImeData_ImGuiPlatformImeData() -> *mut ImGuiPlatformImeData;
+}
+extern "C" {
+    pub fn ImGuiPlatformImeData_destroy(self_: *mut ImGuiPlatformImeData);
+}
+extern "C" {
     pub fn igImHashData(
         data: *const ::std::os::raw::c_void,
         data_size: usize,
@@ -27518,11 +27981,549 @@ extern "C" {
     );
 }
 extern "C" {
+    pub fn ImGuiTextIndex_clear(self_: *mut ImGuiTextIndex);
+}
+extern "C" {
+    pub fn ImGuiTextIndex_size(self_: *mut ImGuiTextIndex) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiTextIndex_get_line_begin(
+        self_: *mut ImGuiTextIndex,
+        base: *const ::std::os::raw::c_char,
+        n: ::std::os::raw::c_int,
+    ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn ImGuiTextIndex_get_line_end(
+        self_: *mut ImGuiTextIndex,
+        base: *const ::std::os::raw::c_char,
+        n: ::std::os::raw::c_int,
+    ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn ImGuiTextIndex_append(
+        self_: *mut ImGuiTextIndex,
+        base: *const ::std::os::raw::c_char,
+        old_size: ::std::os::raw::c_int,
+        new_size: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
     pub fn igImLowerBound(
         in_begin: *mut ImGuiStoragePair,
         in_end: *mut ImGuiStoragePair,
         key: ImGuiID,
     ) -> *mut ImGuiStoragePair;
+}
+extern "C" {
+    pub fn ImGuiDataVarInfo_GetVarPtr(
+        self_: *mut ImGuiDataVarInfo,
+        parent: *mut ::std::os::raw::c_void,
+    ) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn ImGuiStyleMod_ImGuiStyleMod_Int(
+        idx: ImGuiStyleVar,
+        v: ::std::os::raw::c_int,
+    ) -> *mut ImGuiStyleMod;
+}
+extern "C" {
+    pub fn ImGuiStyleMod_destroy(self_: *mut ImGuiStyleMod);
+}
+extern "C" {
+    pub fn ImGuiStyleMod_ImGuiStyleMod_Float(idx: ImGuiStyleVar, v: f32) -> *mut ImGuiStyleMod;
+}
+extern "C" {
+    pub fn ImGuiStyleMod_ImGuiStyleMod_Vec2(idx: ImGuiStyleVar, v: ImVec2) -> *mut ImGuiStyleMod;
+}
+extern "C" {
+    pub fn ImGuiComboPreviewData_ImGuiComboPreviewData() -> *mut ImGuiComboPreviewData;
+}
+extern "C" {
+    pub fn ImGuiComboPreviewData_destroy(self_: *mut ImGuiComboPreviewData);
+}
+extern "C" {
+    pub fn ImGuiMenuColumns_ImGuiMenuColumns() -> *mut ImGuiMenuColumns;
+}
+extern "C" {
+    pub fn ImGuiMenuColumns_destroy(self_: *mut ImGuiMenuColumns);
+}
+extern "C" {
+    pub fn ImGuiMenuColumns_Update(
+        self_: *mut ImGuiMenuColumns,
+        spacing: f32,
+        window_reappearing: bool,
+    );
+}
+extern "C" {
+    pub fn ImGuiMenuColumns_DeclColumns(
+        self_: *mut ImGuiMenuColumns,
+        w_icon: f32,
+        w_label: f32,
+        w_shortcut: f32,
+        w_mark: f32,
+    ) -> f32;
+}
+extern "C" {
+    pub fn ImGuiMenuColumns_CalcNextTotalWidth(self_: *mut ImGuiMenuColumns, update_offsets: bool);
+}
+extern "C" {
+    pub fn ImGuiInputTextDeactivatedState_ImGuiInputTextDeactivatedState(
+    ) -> *mut ImGuiInputTextDeactivatedState;
+}
+extern "C" {
+    pub fn ImGuiInputTextDeactivatedState_destroy(self_: *mut ImGuiInputTextDeactivatedState);
+}
+extern "C" {
+    pub fn ImGuiInputTextDeactivatedState_ClearFreeMemory(
+        self_: *mut ImGuiInputTextDeactivatedState,
+    );
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ImGuiInputTextState() -> *mut ImGuiInputTextState;
+}
+extern "C" {
+    pub fn ImGuiInputTextState_destroy(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ClearText(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ClearFreeMemory(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_OnKeyPressed(
+        self_: *mut ImGuiInputTextState,
+        key: ::std::os::raw::c_int,
+    );
+}
+extern "C" {
+    pub fn ImGuiInputTextState_OnCharPressed(
+        self_: *mut ImGuiInputTextState,
+        c: ::std::os::raw::c_uint,
+    );
+}
+extern "C" {
+    pub fn ImGuiInputTextState_CursorAnimReset(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_CursorClamp(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_HasSelection(self_: *mut ImGuiInputTextState) -> bool;
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ClearSelection(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_GetCursorPos(
+        self_: *mut ImGuiInputTextState,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiInputTextState_GetSelectionStart(
+        self_: *mut ImGuiInputTextState,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiInputTextState_GetSelectionEnd(
+        self_: *mut ImGuiInputTextState,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn ImGuiInputTextState_SelectAll(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ReloadUserBufAndSelectAll(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ReloadUserBufAndKeepSelection(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiInputTextState_ReloadUserBufAndMoveToEnd(self_: *mut ImGuiInputTextState);
+}
+extern "C" {
+    pub fn ImGuiNextWindowData_ImGuiNextWindowData() -> *mut ImGuiNextWindowData;
+}
+extern "C" {
+    pub fn ImGuiNextWindowData_destroy(self_: *mut ImGuiNextWindowData);
+}
+extern "C" {
+    pub fn ImGuiNextWindowData_ClearFlags(self_: *mut ImGuiNextWindowData);
+}
+extern "C" {
+    pub fn ImGuiNextItemData_ImGuiNextItemData() -> *mut ImGuiNextItemData;
+}
+extern "C" {
+    pub fn ImGuiNextItemData_destroy(self_: *mut ImGuiNextItemData);
+}
+extern "C" {
+    pub fn ImGuiNextItemData_ClearFlags(self_: *mut ImGuiNextItemData);
+}
+extern "C" {
+    pub fn ImGuiLastItemData_ImGuiLastItemData() -> *mut ImGuiLastItemData;
+}
+extern "C" {
+    pub fn ImGuiLastItemData_destroy(self_: *mut ImGuiLastItemData);
+}
+extern "C" {
+    pub fn ImGuiErrorRecoveryState_ImGuiErrorRecoveryState() -> *mut ImGuiErrorRecoveryState;
+}
+extern "C" {
+    pub fn ImGuiErrorRecoveryState_destroy(self_: *mut ImGuiErrorRecoveryState);
+}
+extern "C" {
+    pub fn ImGuiPtrOrIndex_ImGuiPtrOrIndex_Ptr(
+        ptr: *mut ::std::os::raw::c_void,
+    ) -> *mut ImGuiPtrOrIndex;
+}
+extern "C" {
+    pub fn ImGuiPtrOrIndex_destroy(self_: *mut ImGuiPtrOrIndex);
+}
+extern "C" {
+    pub fn ImGuiPtrOrIndex_ImGuiPtrOrIndex_Int(
+        index: ::std::os::raw::c_int,
+    ) -> *mut ImGuiPtrOrIndex;
+}
+extern "C" {
+    pub fn ImGuiPopupData_ImGuiPopupData() -> *mut ImGuiPopupData;
+}
+extern "C" {
+    pub fn ImGuiPopupData_destroy(self_: *mut ImGuiPopupData);
+}
+extern "C" {
+    pub fn ImGuiInputEvent_ImGuiInputEvent() -> *mut ImGuiInputEvent;
+}
+extern "C" {
+    pub fn ImGuiInputEvent_destroy(self_: *mut ImGuiInputEvent);
+}
+extern "C" {
+    pub fn ImGuiKeyRoutingData_ImGuiKeyRoutingData() -> *mut ImGuiKeyRoutingData;
+}
+extern "C" {
+    pub fn ImGuiKeyRoutingData_destroy(self_: *mut ImGuiKeyRoutingData);
+}
+extern "C" {
+    pub fn ImGuiKeyRoutingTable_ImGuiKeyRoutingTable() -> *mut ImGuiKeyRoutingTable;
+}
+extern "C" {
+    pub fn ImGuiKeyRoutingTable_destroy(self_: *mut ImGuiKeyRoutingTable);
+}
+extern "C" {
+    pub fn ImGuiKeyRoutingTable_Clear(self_: *mut ImGuiKeyRoutingTable);
+}
+extern "C" {
+    pub fn ImGuiKeyOwnerData_ImGuiKeyOwnerData() -> *mut ImGuiKeyOwnerData;
+}
+extern "C" {
+    pub fn ImGuiKeyOwnerData_destroy(self_: *mut ImGuiKeyOwnerData);
+}
+extern "C" {
+    pub fn ImGuiListClipperRange_FromIndices(
+        min: ::std::os::raw::c_int,
+        max: ::std::os::raw::c_int,
+    ) -> ImGuiListClipperRange;
+}
+extern "C" {
+    pub fn ImGuiListClipperRange_FromPositions(
+        y1: f32,
+        y2: f32,
+        off_min: ::std::os::raw::c_int,
+        off_max: ::std::os::raw::c_int,
+    ) -> ImGuiListClipperRange;
+}
+extern "C" {
+    pub fn ImGuiListClipperData_ImGuiListClipperData() -> *mut ImGuiListClipperData;
+}
+extern "C" {
+    pub fn ImGuiListClipperData_destroy(self_: *mut ImGuiListClipperData);
+}
+extern "C" {
+    pub fn ImGuiListClipperData_Reset(
+        self_: *mut ImGuiListClipperData,
+        clipper: *mut ImGuiListClipper,
+    );
+}
+extern "C" {
+    pub fn ImGuiNavItemData_ImGuiNavItemData() -> *mut ImGuiNavItemData;
+}
+extern "C" {
+    pub fn ImGuiNavItemData_destroy(self_: *mut ImGuiNavItemData);
+}
+extern "C" {
+    pub fn ImGuiNavItemData_Clear(self_: *mut ImGuiNavItemData);
+}
+extern "C" {
+    pub fn ImGuiTypingSelectState_ImGuiTypingSelectState() -> *mut ImGuiTypingSelectState;
+}
+extern "C" {
+    pub fn ImGuiTypingSelectState_destroy(self_: *mut ImGuiTypingSelectState);
+}
+extern "C" {
+    pub fn ImGuiTypingSelectState_Clear(self_: *mut ImGuiTypingSelectState);
+}
+extern "C" {
+    pub fn ImGuiOldColumnData_ImGuiOldColumnData() -> *mut ImGuiOldColumnData;
+}
+extern "C" {
+    pub fn ImGuiOldColumnData_destroy(self_: *mut ImGuiOldColumnData);
+}
+extern "C" {
+    pub fn ImGuiOldColumns_ImGuiOldColumns() -> *mut ImGuiOldColumns;
+}
+extern "C" {
+    pub fn ImGuiOldColumns_destroy(self_: *mut ImGuiOldColumns);
+}
+extern "C" {
+    pub fn ImGuiBoxSelectState_ImGuiBoxSelectState() -> *mut ImGuiBoxSelectState;
+}
+extern "C" {
+    pub fn ImGuiBoxSelectState_destroy(self_: *mut ImGuiBoxSelectState);
+}
+extern "C" {
+    pub fn ImGuiMultiSelectTempData_ImGuiMultiSelectTempData() -> *mut ImGuiMultiSelectTempData;
+}
+extern "C" {
+    pub fn ImGuiMultiSelectTempData_destroy(self_: *mut ImGuiMultiSelectTempData);
+}
+extern "C" {
+    pub fn ImGuiMultiSelectTempData_Clear(self_: *mut ImGuiMultiSelectTempData);
+}
+extern "C" {
+    pub fn ImGuiMultiSelectTempData_ClearIO(self_: *mut ImGuiMultiSelectTempData);
+}
+extern "C" {
+    pub fn ImGuiMultiSelectState_ImGuiMultiSelectState() -> *mut ImGuiMultiSelectState;
+}
+extern "C" {
+    pub fn ImGuiMultiSelectState_destroy(self_: *mut ImGuiMultiSelectState);
+}
+extern "C" {
+    pub fn ImGuiDockNode_ImGuiDockNode(id: ImGuiID) -> *mut ImGuiDockNode;
+}
+extern "C" {
+    pub fn ImGuiDockNode_destroy(self_: *mut ImGuiDockNode);
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsRootNode(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsDockSpace(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsFloatingNode(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsCentralNode(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsHiddenTabBar(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsNoTabBar(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsSplitNode(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsLeafNode(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_IsEmpty(self_: *mut ImGuiDockNode) -> bool;
+}
+extern "C" {
+    pub fn ImGuiDockNode_Rect(pOut: *mut ImRect, self_: *mut ImGuiDockNode);
+}
+extern "C" {
+    pub fn ImGuiDockNode_SetLocalFlags(self_: *mut ImGuiDockNode, flags: ImGuiDockNodeFlags);
+}
+extern "C" {
+    pub fn ImGuiDockNode_UpdateMergedFlags(self_: *mut ImGuiDockNode);
+}
+extern "C" {
+    pub fn ImGuiDockContext_ImGuiDockContext() -> *mut ImGuiDockContext;
+}
+extern "C" {
+    pub fn ImGuiDockContext_destroy(self_: *mut ImGuiDockContext);
+}
+extern "C" {
+    pub fn ImGuiViewportP_ImGuiViewportP() -> *mut ImGuiViewportP;
+}
+extern "C" {
+    pub fn ImGuiViewportP_destroy(self_: *mut ImGuiViewportP);
+}
+extern "C" {
+    pub fn ImGuiViewportP_ClearRequestFlags(self_: *mut ImGuiViewportP);
+}
+extern "C" {
+    pub fn ImGuiViewportP_CalcWorkRectPos(
+        pOut: *mut ImVec2,
+        self_: *mut ImGuiViewportP,
+        inset_min: ImVec2,
+    );
+}
+extern "C" {
+    pub fn ImGuiViewportP_CalcWorkRectSize(
+        pOut: *mut ImVec2,
+        self_: *mut ImGuiViewportP,
+        inset_min: ImVec2,
+        inset_max: ImVec2,
+    );
+}
+extern "C" {
+    pub fn ImGuiViewportP_UpdateWorkRect(self_: *mut ImGuiViewportP);
+}
+extern "C" {
+    pub fn ImGuiViewportP_GetMainRect(pOut: *mut ImRect, self_: *mut ImGuiViewportP);
+}
+extern "C" {
+    pub fn ImGuiViewportP_GetWorkRect(pOut: *mut ImRect, self_: *mut ImGuiViewportP);
+}
+extern "C" {
+    pub fn ImGuiViewportP_GetBuildWorkRect(pOut: *mut ImRect, self_: *mut ImGuiViewportP);
+}
+extern "C" {
+    pub fn ImGuiWindowSettings_ImGuiWindowSettings() -> *mut ImGuiWindowSettings;
+}
+extern "C" {
+    pub fn ImGuiWindowSettings_destroy(self_: *mut ImGuiWindowSettings);
+}
+extern "C" {
+    pub fn ImGuiWindowSettings_GetName(
+        self_: *mut ImGuiWindowSettings,
+    ) -> *mut ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn ImGuiSettingsHandler_ImGuiSettingsHandler() -> *mut ImGuiSettingsHandler;
+}
+extern "C" {
+    pub fn ImGuiSettingsHandler_destroy(self_: *mut ImGuiSettingsHandler);
+}
+extern "C" {
+    pub fn ImGuiDebugAllocInfo_ImGuiDebugAllocInfo() -> *mut ImGuiDebugAllocInfo;
+}
+extern "C" {
+    pub fn ImGuiDebugAllocInfo_destroy(self_: *mut ImGuiDebugAllocInfo);
+}
+extern "C" {
+    pub fn ImGuiStackLevelInfo_ImGuiStackLevelInfo() -> *mut ImGuiStackLevelInfo;
+}
+extern "C" {
+    pub fn ImGuiStackLevelInfo_destroy(self_: *mut ImGuiStackLevelInfo);
+}
+extern "C" {
+    pub fn ImGuiIDStackTool_ImGuiIDStackTool() -> *mut ImGuiIDStackTool;
+}
+extern "C" {
+    pub fn ImGuiIDStackTool_destroy(self_: *mut ImGuiIDStackTool);
+}
+extern "C" {
+    pub fn ImGuiContextHook_ImGuiContextHook() -> *mut ImGuiContextHook;
+}
+extern "C" {
+    pub fn ImGuiContextHook_destroy(self_: *mut ImGuiContextHook);
+}
+extern "C" {
+    pub fn ImGuiContext_ImGuiContext(shared_font_atlas: *mut ImFontAtlas) -> *mut ImGuiContext;
+}
+extern "C" {
+    pub fn ImGuiContext_destroy(self_: *mut ImGuiContext);
+}
+extern "C" {
+    pub fn ImGuiWindow_ImGuiWindow(
+        context: *mut ImGuiContext,
+        name: *const ::std::os::raw::c_char,
+    ) -> *mut ImGuiWindow;
+}
+extern "C" {
+    pub fn ImGuiWindow_destroy(self_: *mut ImGuiWindow);
+}
+extern "C" {
+    pub fn ImGuiWindow_GetID_Str(
+        self_: *mut ImGuiWindow,
+        str_: *const ::std::os::raw::c_char,
+        str_end: *const ::std::os::raw::c_char,
+    ) -> ImGuiID;
+}
+extern "C" {
+    pub fn ImGuiWindow_GetID_Ptr(
+        self_: *mut ImGuiWindow,
+        ptr: *const ::std::os::raw::c_void,
+    ) -> ImGuiID;
+}
+extern "C" {
+    pub fn ImGuiWindow_GetID_Int(self_: *mut ImGuiWindow, n: ::std::os::raw::c_int) -> ImGuiID;
+}
+extern "C" {
+    pub fn ImGuiWindow_GetIDFromPos(self_: *mut ImGuiWindow, p_abs: ImVec2) -> ImGuiID;
+}
+extern "C" {
+    pub fn ImGuiWindow_GetIDFromRectangle(self_: *mut ImGuiWindow, r_abs: ImRect) -> ImGuiID;
+}
+extern "C" {
+    pub fn ImGuiWindow_Rect(pOut: *mut ImRect, self_: *mut ImGuiWindow);
+}
+extern "C" {
+    pub fn ImGuiWindow_CalcFontSize(self_: *mut ImGuiWindow) -> f32;
+}
+extern "C" {
+    pub fn ImGuiWindow_TitleBarRect(pOut: *mut ImRect, self_: *mut ImGuiWindow);
+}
+extern "C" {
+    pub fn ImGuiWindow_MenuBarRect(pOut: *mut ImRect, self_: *mut ImGuiWindow);
+}
+extern "C" {
+    pub fn ImGuiTabItem_ImGuiTabItem() -> *mut ImGuiTabItem;
+}
+extern "C" {
+    pub fn ImGuiTabItem_destroy(self_: *mut ImGuiTabItem);
+}
+extern "C" {
+    pub fn ImGuiTabBar_ImGuiTabBar() -> *mut ImGuiTabBar;
+}
+extern "C" {
+    pub fn ImGuiTabBar_destroy(self_: *mut ImGuiTabBar);
+}
+extern "C" {
+    pub fn ImGuiTableColumn_ImGuiTableColumn() -> *mut ImGuiTableColumn;
+}
+extern "C" {
+    pub fn ImGuiTableColumn_destroy(self_: *mut ImGuiTableColumn);
+}
+extern "C" {
+    pub fn ImGuiTableInstanceData_ImGuiTableInstanceData() -> *mut ImGuiTableInstanceData;
+}
+extern "C" {
+    pub fn ImGuiTableInstanceData_destroy(self_: *mut ImGuiTableInstanceData);
+}
+extern "C" {
+    pub fn ImGuiTable_ImGuiTable() -> *mut ImGuiTable;
+}
+extern "C" {
+    pub fn ImGuiTable_destroy(self_: *mut ImGuiTable);
+}
+extern "C" {
+    pub fn ImGuiTableTempData_ImGuiTableTempData() -> *mut ImGuiTableTempData;
+}
+extern "C" {
+    pub fn ImGuiTableTempData_destroy(self_: *mut ImGuiTableTempData);
+}
+extern "C" {
+    pub fn ImGuiTableColumnSettings_ImGuiTableColumnSettings() -> *mut ImGuiTableColumnSettings;
+}
+extern "C" {
+    pub fn ImGuiTableColumnSettings_destroy(self_: *mut ImGuiTableColumnSettings);
+}
+extern "C" {
+    pub fn ImGuiTableSettings_ImGuiTableSettings() -> *mut ImGuiTableSettings;
+}
+extern "C" {
+    pub fn ImGuiTableSettings_destroy(self_: *mut ImGuiTableSettings);
+}
+extern "C" {
+    pub fn ImGuiTableSettings_GetColumnSettings(
+        self_: *mut ImGuiTableSettings,
+    ) -> *mut ImGuiTableColumnSettings;
 }
 extern "C" {
     pub fn igGetCurrentWindowRead() -> *mut ImGuiWindow;
@@ -29611,10 +30612,33 @@ extern "C" {
     pub fn igLogText(fmt: *const ::std::os::raw::c_char, ...);
 }
 extern "C" {
+    pub fn ImGuiTextBuffer_appendf(
+        buffer: *mut ImGuiTextBuffer,
+        fmt: *const ::std::os::raw::c_char,
+        ...
+    );
+}
+extern "C" {
     pub fn igGET_FLT_MAX() -> f32;
 }
 extern "C" {
     pub fn igGET_FLT_MIN() -> f32;
+}
+extern "C" {
+    pub fn ImGuiPlatformIO_Set_Platform_GetWindowPos(
+        platform_io: *mut ImGuiPlatformIO,
+        user_callback: ::std::option::Option<
+            unsafe extern "C" fn(vp: *mut ImGuiViewport, out_pos: *mut ImVec2),
+        >,
+    );
+}
+extern "C" {
+    pub fn ImGuiPlatformIO_Set_Platform_GetWindowSize(
+        platform_io: *mut ImGuiPlatformIO,
+        user_callback: ::std::option::Option<
+            unsafe extern "C" fn(vp: *mut ImGuiViewport, out_size: *mut ImVec2),
+        >,
+    );
 }
 pub type __builtin_va_list = [__va_list_tag; 1usize];
 #[repr(C)]

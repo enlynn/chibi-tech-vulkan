@@ -306,6 +306,7 @@ pub struct DeviceFnTable
     pub cmd_set_scissor:                 FN_vkCmdSetScissor,
     pub cmd_set_viewport:                FN_vkCmdSetViewport,
     pub cmd_draw:                        FN_vkCmdDraw,
+    pub cmd_push_constants:              FN_vkCmdPushConstants,
 }
 
 /* ======================================================================== */
@@ -507,7 +508,8 @@ pub fn load_device_functions(gbl: &GlobalFnTable, inst: VkInstance, device: VkDe
         cmd_end_rendering:               get_device_procaddr!(vkCmdEndRendering),
         cmd_set_scissor:                 get_device_procaddr!(vkCmdSetScissor),
         cmd_set_viewport:                get_device_procaddr!(vkCmdSetViewport),
-        cmd_draw:                        get_device_procaddr!(vkCmdDraw)
+        cmd_draw:                        get_device_procaddr!(vkCmdDraw),
+        cmd_push_constants:              get_device_procaddr!(vkCmdPushConstants),
     };
 
     Ok(funcs)
@@ -687,4 +689,13 @@ pub fn make_rendering_info(render_extent: VkExtent2D, color_attachment: *const V
     render_info.pDepthAttachment     = depth_attachment;;
 
     return render_info;
+}
+
+#[inline(always)]
+pub fn make_push_constant_range(offset: u32, size: u32, stage_flags: VkShaderStageFlags) -> VkPushConstantRange {
+    return VkPushConstantRange{
+        stageFlags: stage_flags,
+        offset,
+        size,
+    };
 }

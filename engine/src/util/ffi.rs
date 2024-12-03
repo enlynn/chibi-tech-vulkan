@@ -42,7 +42,7 @@ macro_rules! byte_array_as_cstr {
 macro_rules! cstr_ptr_to_str {
     ($expr:expr) => {{
         extern "C" {
-            fn strlen(s: *const raw::c_char) -> usize;
+            fn strlen(s: *const std::os::raw::c_char) -> usize;
         }
 
         let val = $expr;

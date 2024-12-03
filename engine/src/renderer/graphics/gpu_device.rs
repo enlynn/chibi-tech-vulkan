@@ -909,6 +909,73 @@ impl Device {
         return context::DeviceContext::new(device);
     }
 
+    pub fn create_imgui_editor(&self, min_image_count: u32) -> super::EditorRenderData {
+        // 1: create descriptor pool for IMGUI
+        //  the size of the pool is very oversized, but it's copied from imgui demo.
+        let sizes: [PoolSizeRatio; 11] = [
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_SAMPLER,                ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, ratio: 1000.0 },
+            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       ratio: 1000.0 },
+        ];
+
+        let descriptor_alloc = self.create_descriptor_allocator(1000, DescriptorAllocatorFlags::AllowFree, sizes.as_slice());
+
+        // 2: initialize imgui library for vulkan
+        use vendor::imgui::{ImGuiVulkanInitInfo, ig_load_vulkan_functions, ig_vulkan_init, ig_vulkan_create_fonts_texture};
+
+        let surface_format = self.gpu.select_surface_format(consts::DEVICE_FEATURES.prefer_hdr);
+
+        let mut dyn_render_info = VkPipelineRenderingCreateInfo::default();
+        dyn_render_info.colorAttachmentCount    = 1;
+        dyn_render_info.pColorAttachmentFormats = &surface_format.format;
+
+        let init_info = ImGuiVulkanInitInfo{
+            Instance:                    self.instance.handle,
+            PhysicalDevice:              self.gpu.handle,
+            Device:                      self.handle,
+            QueueFamily:                 self.get_queue_index(util::QueueType::Graphics),
+            Queue:                       self.get_queue(util::QueueType::Graphics),
+            DescriptorPool:              descriptor_alloc.pool,          // See requirements in imgui notes
+            RenderPass:                  ptr::null_mut(),                // using dynamic rendering, so can be ignored
+            MinImageCount:               min_image_count,                // >= 2
+            ImageCount:                  min_image_count,                // >= MinImageCount
+            MSAASamples:                 VK_SAMPLE_COUNT_1_BIT,          // 0 defaults to VK_SAMPLE_COUNT_1_BIT
+
+            // (Optional)
+            PipelineCache:               ptr::null_mut(),
+            Subpass:                     0,
+
+            // (Optional) Dynamic Rendering
+            // Need to explicitly enable VK_KHR_dynamic_rendering extension to use this, even for Vulkan 1.3.
+            UseDynamicRendering:         true,
+            PipelineRenderingCreateInfo: dyn_render_info,
+
+            // (Optional) Allocation, Debugging
+            Allocator:                   ptr::null(),
+            CheckVkResultFn:             None,
+            MinAllocationSize:           0,
+        };
+
+        ig_load_vulkan_functions(self.instance.glb_fns.get_inst_procaddr, self.instance.handle);
+        ig_vulkan_init(init_info);
+        ig_vulkan_create_fonts_texture();
+
+        return super::EditorRenderData{ allocator: descriptor_alloc };
+    }
+
+    pub fn destroy_imgui_editor(&self, editor: &mut super::EditorRenderData) {
+        vendor::imgui::ig_vulkan_shutdown();
+        self.destroy_descriptor_allocator(&mut editor.allocator);
+    }
+
     pub fn get_queue(&self, queue_type: util::QueueType) -> VkQueue {
         let queue_index = self.get_queue_index(queue_type);
 
@@ -1237,6 +1304,7 @@ impl Device {
             cmd_set_scissor:          self.fns.cmd_set_scissor,
             cmd_set_viewport:         self.fns.cmd_set_viewport,
             cmd_draw:                 self.fns.cmd_draw,
+            cmd_push_constants:       self.fns.cmd_push_constants,
         };
 
         return CommandBuffer::new(fn_table, unsafe { buffer.assume_init() });
@@ -1356,7 +1424,7 @@ impl Device {
         call!(self.fns.destroy_descriptor_set_layout, self.handle, layout, ptr::null());
     }
 
-    pub fn create_descriptor_allocator(&self, max_sets: u32, pool_ratios: &[PoolSizeRatio]) -> DescriptorAllocator {
+    pub fn create_descriptor_allocator(&self, max_sets: u32, flags: DescriptorAllocatorFlags, pool_ratios: &[PoolSizeRatio]) -> DescriptorAllocator {
         let mut pool_sizes = Vec::<VkDescriptorPoolSize>::with_capacity(pool_ratios.len());
         for ratio in pool_ratios {
             pool_sizes.push(VkDescriptorPoolSize{
@@ -1365,10 +1433,15 @@ impl Device {
             });
         }
 
+        let vk_flags = match (flags) {
+            DescriptorAllocatorFlags::None      => 0,
+            DescriptorAllocatorFlags::AllowFree => VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        };
+
         let pool_info = VkDescriptorPoolCreateInfo{
             sType:         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
             pNext:         ptr::null(),
-            flags:         0,
+            flags:         vk_flags,
             maxSets:       max_sets,
             poolSizeCount: pool_sizes.len() as u32,
             pPoolSizes:    pool_sizes.as_ptr(),
@@ -1511,5 +1584,18 @@ impl Device {
 
     pub fn destroy_pipeline(&self, pipeline: VkPipeline) {
         call!(self.fns.destroy_pipeline, self.handle, pipeline, ptr::null());
+    }
+
+    pub fn reset_fences(&self, fence: &super::Fence) {
+        call_throw!(self.fns.reset_fences, self.handle, 1, fence);
+    }
+
+    pub fn queue_submit(&self, queue_type: util::QueueType, info: VkSubmitInfo2, fence: super::Fence) {
+        let graphics_queue = self.get_queue(queue_type);
+        call_throw!(self.fns.queue_submit2, graphics_queue, 1, &info, fence);
+    }
+
+    pub fn wait_for_fences(&self, fence: super::Fence) {
+        call_throw!(self.fns.wait_for_fences, self.handle, 1, &fence, VK_TRUE, 1000000000);
     }
 }

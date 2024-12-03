@@ -84,6 +84,10 @@ impl Swapchain {
         self.images[self.swapchain_index as usize]
     }
 
+    pub fn get_swapchain_image_view(&self) -> VkImageView {
+        self.image_views[self.swapchain_index as usize]
+    }
+
     pub fn get_render_semaphore(&self) -> super::Semaphore {
         self.render_semaphores[self.frame_index as usize]
     }
@@ -94,6 +98,10 @@ impl Swapchain {
 
     pub fn get_render_fence(&self) -> super::Fence {
         self.render_fences[self.frame_index as usize]
+    }
+
+    pub fn get_image_count(&self) -> usize {
+        self.images.len()
     }
 
     pub fn acquire_frame(&mut self, device: &Device) -> bool {

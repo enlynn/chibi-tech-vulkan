@@ -1,5 +1,6 @@
 
 use std::cell::RefCell;
+use std::ptr;
 
 use crate::window;
 use crate::renderer;
@@ -60,7 +61,7 @@ impl Engine {
         let mut game = self.game.borrow_mut();
 
         // run post-game engine setup
-
+        let mut frame_index: usize = 0;
 
         // initialize the game
         let mut game_res = game.on_init();
@@ -68,10 +69,17 @@ impl Engine {
             return;
         }
 
+        //use std::time::{Duration, Instant};
+        //let mut current_time = Instant::now();
+
         loop {
             if !self.window_system.pump_window_message() {
                 break;
             }
+
+            //let mut elapsed_time = Instant::now();
+            //println!("\tFinished polling input. {}", (elapsed_time - current_time).as_millis_f64());
+            //current_time = elapsed_time;
 
             if self.client_window.should_window_close() {
                 break;
@@ -82,6 +90,27 @@ impl Engine {
                 break;
             }
 
+            // this should be the "editor_begin_frame()"
+            if true {
+                use vendor::imgui::*;
+                use crate::util::ffi::*;
+
+                ig_vulkan_new_frame();
+                ig_glfw_new_frame();
+                call!(igNewFrame);
+
+                let mut is_open = true;
+                call!(igShowDemoWindow, &mut is_open);
+
+                self.render_system.borrow_mut().on_editor_update();
+
+                call!(igEndFrame);
+            }
+
+            //elapsed_time = Instant::now();
+            //println!("\tFinished updating imgui. {}", (elapsed_time - current_time).as_millis_f64());
+            //current_time = elapsed_time;
+
             game_res = game.on_render();
             if !game_res {
                 break;
@@ -89,6 +118,22 @@ impl Engine {
 
             let empty_cmd_buffer = renderer::RenderCommandBuffer::default();
             self.render_system.borrow_mut().render(empty_cmd_buffer);
+
+            // this should be the "editor_render_external_windows()" - render imgui viewports
+            unsafe {
+                let io = { &mut *vendor::imgui::igGetIO() }; // gets a mutable reference
+                if (io.ConfigFlags & vendor::imgui::ImGuiConfigFlags_ViewportsEnable as i32) != 0
+                {
+                    vendor::imgui::igUpdatePlatformWindows();
+                    vendor::imgui::igRenderPlatformWindowsDefault(ptr::null_mut(), ptr::null_mut());
+                }
+            }
+
+            //elapsed_time = Instant::now();
+            //println!("\tFinished rendering. {}", (elapsed_time - current_time).as_millis_f64());
+            //current_time = elapsed_time;
+
+            frame_index += 1;
         }
     }
 }

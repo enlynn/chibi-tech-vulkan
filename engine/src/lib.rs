@@ -3,6 +3,7 @@
 
 #![feature(concat_idents)]
 #![feature(stmt_expr_attributes)]
+#![feature(duration_millis_float)]
 
 extern crate vendor;
 

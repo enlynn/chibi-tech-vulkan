@@ -1,6 +1,7 @@
 use rand::prelude::*;
 
 pub mod float3;
+pub mod float4;
 
 use float3::Float3;
 

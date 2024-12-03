@@ -1,3 +1,5 @@
+use std::ffi::c_void;
+
 use crate::util::ffi::call;
 
 use super::gpu_utils::*;
@@ -18,7 +20,8 @@ pub struct CommandBufferFnTable {
     pub cmd_end_rendering:        FN_vkCmdEndRendering,
     pub cmd_set_scissor:          FN_vkCmdSetScissor,
     pub cmd_set_viewport:         FN_vkCmdSetViewport,
-    pub cmd_draw:                 FN_vkCmdDraw
+    pub cmd_draw:                 FN_vkCmdDraw,
+    pub cmd_push_constants:       FN_vkCmdPushConstants,
 }
 
 #[derive(PartialEq)]
@@ -198,6 +201,13 @@ impl CommandBuffer {
 
         call!(self.fns.cmd_bind_descriptor_sets, self.handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, first_set,
             descriptor_sets.len() as u32, descriptor_sets.as_ptr(), 0, std::ptr::null());
+    }
+
+    pub fn bind_push_constants<PushConstants>(&mut self, pipeline_layout: VkPipelineLayout, push_consts: PushConstants, offset: u32) {
+        assert!(self.state == CommandBufferState::Open);
+
+        let consts_ptr: *const c_void = &push_consts as *const PushConstants as *const c_void;
+        call!(self.fns.cmd_push_constants, self.handle, pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, offset, std::mem::size_of::<PushConstants>() as u32, consts_ptr);
     }
 
     pub fn dispatch_compute(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {

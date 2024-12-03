@@ -24,6 +24,10 @@ pub struct AllocatedImage {
     pub format: api::VkFormat,
 }
 
+pub struct EditorRenderData {
+    allocator: gpu_descriptors::DescriptorAllocator,
+}
+
 impl Default for AllocatedImage {
     fn default() -> Self {
         Self{

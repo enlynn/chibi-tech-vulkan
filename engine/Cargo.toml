@@ -9,7 +9,8 @@ rand = { version = "0.8.5" }
 
 [dependencies.vendor]
 path="../vendor"
-#features = ["generator"]
+# Uncomment to generate vendor bindings. Will increase build times.
+# features = ["generator"]
 
 [lib]
 path = "src/lib.rs"

@@ -1,5 +1,9 @@
 mod graphics;
 
+use crate::math::float4::*;
+use crate::util::ffi::*;
+
+use gpu_descriptors::DescriptorAllocatorFlags;
 use graphics::*;
 use graphics::{
     AllocatedImage,
@@ -15,11 +19,13 @@ use graphics::{
 use super::window::NativeSurface;
 
 use std::borrow::BorrowMut;
+use std::ptr;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::str::FromStr;
 
 use vendor::vulkan::*;
+use vendor::imgui::*;
 
 #[derive(Clone, Copy)]
 pub enum RenderCommand{
@@ -63,6 +69,22 @@ struct PerFrameData {
     state: RefCell<PerFrameState>, // i don't like this one bit...
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+struct ComputePushConstants {
+    data1: Float4,
+    data2: Float4,
+    data3: Float4,
+    data4: Float4,
+}
+
+struct ComputeEffect {
+    pub name:      String,
+	pub pipeline:  VkPipeline,
+	pub layout:    VkPipelineLayout,
+	pub push_data: ComputePushConstants,
+}
+
 pub struct RenderSystem{
     device:      Device,
     swapchain:   Swapchain,
@@ -75,9 +97,20 @@ pub struct RenderSystem{
     draw_image_dl: VkDescriptorSetLayout,
     draw_image_ds: VkDescriptorSet,
 
+    // immediate context submission - not quite sure where to put this right now
+    imm_fence:          Fence,
+    imm_command_buffer: CommandBuffer,
+    imm_command_pool:   CommandPool,
+
+    // IMGUI Editor Data
+    editor_data:        EditorRenderData,
+
 	// for the background
 	gradient_pl:   VkPipelineLayout,
 	gradient_p:    VkPipeline,
+
+	compute_effects:        Vec<ComputeEffect>,
+	current_compute_effect: usize,
 
 	// for the triangle
 	triangle_pl:   VkPipelineLayout,
@@ -166,6 +199,9 @@ impl RenderSystem {
 
             ds
         };
+
+        vendor::imgui::ig_vulkan_set_min_image_count(self.swapchain.get_image_count() as u32);
+        //ImGui_ImplVulkanH_CreateOrResizeWindow(g_Instance, g_PhysicalDevice, g_Device, &g_MainWindowData, g_QueueFamily, g_Allocator, fb_width, fb_height, g_MinImageCount);
     }
 
     pub fn new(create_info: RendererCreateInfo) -> RenderSystem {
@@ -191,6 +227,13 @@ impl RenderSystem {
             frame_data.push(Rc::new(init_frame_data(&device)));
         }
 
+        // Create immediate submission context
+        //
+
+        let imm_fence:          VkFence       = device.create_fence(true);
+        let imm_command_pool:   CommandPool   = device.create_command_pool(QueueType::Graphics);
+        let imm_command_buffer: CommandBuffer = device.create_command_buffer(&imm_command_pool);
+
         // Create descriptors
         //
 
@@ -199,7 +242,7 @@ impl RenderSystem {
                 PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, ratio: 1.0 },
             ];
 
-            device.create_descriptor_allocator(10, sizes.as_slice())
+            device.create_descriptor_allocator(10, DescriptorAllocatorFlags::None, sizes.as_slice())
         };
 
         let draw_image_dl = {
@@ -236,6 +279,70 @@ impl RenderSystem {
         let gradient_p = device.create_compute_pipeline(gradient_sm, gradient_pl);
 
         device.destroy_shader_module(gradient_sm);
+
+        // Gradient Color Compute Effect
+        //
+
+        let compute_effect_gradient = {
+            let gradient_color_sm = load_shader_module(&device, "gradient_color", ShaderStage::Compute);
+
+            let gradient_color_pl = {
+                let descriptors:    [VkDescriptorSetLayout; 1] = [ draw_image_dl ];
+                let push_constants: [VkPushConstantRange; 1]   = [
+                    make_push_constant_range(0, std::mem::size_of::<ComputePushConstants>() as u32, VK_SHADER_STAGE_COMPUTE_BIT),
+                ];
+
+                device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
+            };
+
+            let gradient_color_p = device.create_compute_pipeline(gradient_color_sm, gradient_color_pl);
+
+            device.destroy_shader_module(gradient_color_sm);
+
+            ComputeEffect{
+                name:      String::from("Gradient Effect"),
+               	pipeline:  gradient_color_p,
+               	layout:    gradient_color_pl,
+               	push_data: ComputePushConstants{
+                    data1: Float4::new(1.0, 0.0, 0.0, 1.0),
+                    data2: Float4::new(0.0, 0.0, 1.0, 1.0),
+                    data3: Float4::zero(),
+                    data4: Float4::zero(),
+                },
+            }
+        };
+
+        // Sky Compute Effect
+        //
+
+        let sky_effect = {
+            let sky_sm = load_shader_module(&device, "sky", ShaderStage::Compute);
+
+            let sky_pl = {
+                let descriptors:    [VkDescriptorSetLayout; 1] = [ draw_image_dl ];
+                let push_constants: [VkPushConstantRange; 1]   = [
+                    make_push_constant_range(0, std::mem::size_of::<ComputePushConstants>() as u32, VK_SHADER_STAGE_COMPUTE_BIT),
+                ];
+
+                device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
+            };
+
+            let sky_p = device.create_compute_pipeline(sky_sm, sky_pl);
+
+            device.destroy_shader_module(sky_sm);
+
+            ComputeEffect{
+                name:      String::from("Sky"),
+               	pipeline:  sky_p,
+               	layout:    sky_pl,
+               	push_data: ComputePushConstants{
+                    data1: Float4::new(0.1, 0.2, 0.4 ,0.97),
+                    data2: Float4::zero(),
+                    data3: Float4::zero(),
+                    data4: Float4::zero(),
+                },
+            }
+        };
 
         // Colored Triangle Pipeline
         //
@@ -281,6 +388,10 @@ impl RenderSystem {
         device.destroy_shader_module(colored_tri_vert_sm);
         device.destroy_shader_module(colored_tri_frag_sm);
 
+        // Setup imgui
+        //
+        let editor_data = device.create_imgui_editor(swapchain.get_image_count() as u32);
+
         return RenderSystem{
             device,
             swapchain,
@@ -290,8 +401,14 @@ impl RenderSystem {
             global_da,
             draw_image_dl,
             draw_image_ds,
+            imm_fence,
+            imm_command_pool,
+            imm_command_buffer,
+            editor_data,
             gradient_pl,
             gradient_p,
+            compute_effects:        vec![compute_effect_gradient, sky_effect],
+            current_compute_effect: 1,
             triangle_pl,
             triangle_p,
         };
@@ -315,6 +432,71 @@ impl RenderSystem {
         cmd_buffer.draw(3, 1, 0, 0);
 
         cmd_buffer.end_rendering();
+    }
+
+    // A function which takes the closure: fn func(cmd_buffer: &CommandBuffer)
+    fn immediate_submit<F>(&mut self, f: F) where
+        F: Fn(&CommandBuffer)
+    {
+        self.device.reset_fences(&self.imm_fence);
+        self.imm_command_buffer.reset();
+        self.imm_command_buffer.begin_recording();
+
+        // execute the function
+        f(&self.imm_command_buffer);
+
+        self.imm_command_buffer.end_recording();
+
+        let cmd_buffer_si = self.imm_command_buffer.get_submit_info();
+        let submit = make_submit_info(cmd_buffer_si, None, None);
+
+        self.device.queue_submit(QueueType::Graphics, submit, self.imm_fence);
+        self.device.wait_for_fences(self.imm_fence);
+    }
+
+    pub fn render_editor(&mut self, command_buffer: &mut CommandBuffer, image_view: VkImageView) {
+        use crate::util::ffi::*;
+
+        call!(vendor::imgui::igRender);
+
+        let draw_extent = VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
+        let color_attachment = make_color_attachment_info(image_view, None, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        let render_info = make_rendering_info(draw_extent, &color_attachment, std::ptr::null());
+
+        command_buffer.begin_rendering(render_info);
+        vendor::imgui::ig_vulkan_render_draw_data(command_buffer.handle, ptr::null_mut());
+        command_buffer.end_rendering();
+    }
+
+    pub fn on_editor_update(&mut self) {
+        use std::{ffi::CString, os::raw};
+
+        let window_name = CString::new("Background").expect("Failed to convert name to CString.");
+        let mut window_open = true;
+
+        if call!(igBegin, window_name.as_ptr(), &mut window_open, 0) {
+            let max_effects = (self.compute_effects.len() - 1) as i32;
+
+            let compute_effect = &mut self.compute_effects[self.current_compute_effect];
+
+            let select_name     = CString::new(format!("Selected Name: {}", compute_effect.name)).expect("Failed to convert name to CString.");
+            let effect_idx_name = CString::new("Effect Index").expect("Failed to convert name to CString.");
+            let data1_name      = CString::new("Data 1").expect("Failed to convert name to CString.");
+            let data2_name      = CString::new("Data 2").expect("Failed to convert name to CString.");
+            let data3_name      = CString::new("Data 3").expect("Failed to convert name to CString.");
+            let data4_name      = CString::new("Data 4").expect("Failed to convert name to CString.");
+
+			call!(igText, select_name.as_ptr());
+			call!(igSliderInt, effect_idx_name.as_ptr(), &mut self.current_compute_effect as *mut usize as *mut i32,
+			    0, max_effects as i32, ptr::null(), 0);
+
+			call!(igDragFloat4, data1_name.as_ptr(), &mut compute_effect.push_data.data1.x, 0.1, 0.0, 1.0, ptr::null(), 0);
+			call!(igDragFloat4, data2_name.as_ptr(), &mut compute_effect.push_data.data2.x, 0.1, 0.0, 1.0, ptr::null(), 0);
+			call!(igDragFloat4, data3_name.as_ptr(), &mut compute_effect.push_data.data3.x, 0.1, 0.0, 1.0, ptr::null(), 0);
+			call!(igDragFloat4, data4_name.as_ptr(), &mut compute_effect.push_data.data4.x, 0.1, 0.0, 1.0, ptr::null(), 0);
+        }
+
+        call!(igEnd);
     }
 
     pub fn render(&mut self, _command_buffer: RenderCommandBuffer) {
@@ -347,13 +529,27 @@ impl RenderSystem {
 
         command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-        { // Draw background
+        if false { // Draw background, simple
             //command_buffer.clear_color_image(self.scene_image.image, &clear_value);
 
             command_buffer.bind_compute_pipeline(self.gradient_p);
 
             let descriptors: [VkDescriptorSet; 1] = [ self.draw_image_ds ];
             command_buffer.bind_compute_descriptor_sets(self.gradient_pl, 0, descriptors.as_slice());
+
+            let group_x = self.scene_image.dims.width  as f32 / 16.0;
+            let group_y = self.scene_image.dims.height as f32 / 16.0;
+
+            command_buffer.dispatch_compute(group_x.ceil() as u32, group_y.ceil() as u32, 1);
+        } else {
+            let compute_effect = &self.compute_effects[self.current_compute_effect];
+
+            command_buffer.bind_compute_pipeline(compute_effect.pipeline);
+
+            let descriptors: [VkDescriptorSet; 1] = [ self.draw_image_ds ];
+            command_buffer.bind_compute_descriptor_sets(compute_effect.layout, 0, descriptors.as_slice());
+
+            command_buffer.bind_push_constants(compute_effect.layout, compute_effect.push_data, 0);
 
             let group_x = self.scene_image.dims.width  as f32 / 16.0;
             let group_y = self.scene_image.dims.height as f32 / 16.0;
@@ -367,8 +563,9 @@ impl RenderSystem {
         }
 
         // Now, copy the scene framebuffer to the swapchain
-        let swapchain_image  = self.swapchain.get_swapchain_image();
-        let swapchain_extent = self.swapchain.get_extent();
+        let swapchain_image      = self.swapchain.get_swapchain_image();
+        let swapchain_image_view = self.swapchain.get_swapchain_image_view();
+        let swapchain_extent     = self.swapchain.get_extent();
 
         command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         command_buffer.transition_image(swapchain_image,        VK_IMAGE_LAYOUT_UNDEFINED,                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -378,8 +575,14 @@ impl RenderSystem {
 
         command_buffer.copy_image_to_image(self.scene_image.image, src_extent, swapchain_image, dst_extent);
 
+        // Render Imgui directly into the swapchain image.
+        //   note: it is likely I will want to render into a rgba 8bit target and composite with the scene image
+        //         before copying into the swapchain buffer. vkguide does this, so I am going to do this for now.
+        command_buffer.transition_image(swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        self.render_editor(&mut command_buffer, swapchain_image_view);
+
         // Transition the swapchain image to present mode
-        command_buffer.transition_image(swapchain_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        command_buffer.transition_image(swapchain_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         // End the Frame
         //
@@ -417,14 +620,24 @@ impl RenderSystem {
     pub fn destroy(&mut self) {
         self.device.wait_idle();
 
+        self.device.destroy_imgui_editor(&mut self.editor_data);
+
         self.device.destroy_pipeline(self.triangle_p);
         self.device.destroy_pipeline_layout(self.triangle_pl);
 
         self.device.destroy_pipeline(self.gradient_p);
         self.device.destroy_pipeline_layout(self.gradient_pl);
 
+        for effect in &self.compute_effects {
+            self.device.destroy_pipeline(effect.pipeline);
+            self.device.destroy_pipeline_layout(effect.layout);
+        }
+
         self.device.destroy_descriptor_allocator(&mut self.global_da);
         self.device.destroy_descriptor_set_layout(self.draw_image_dl);
+
+        self.device.destroy_fence(&mut self.imm_fence);
+        self.device.destroy_command_pool(&mut self.imm_command_pool);
 
         for frame_data in &self.frame_data{
             self.device.destroy_command_pool(&mut frame_data.state.borrow_mut().command_pool);

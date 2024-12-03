@@ -139,13 +139,68 @@ fn build_imgui_lib() {
     println!("cargo:rustc-link-lib=cimgui");
 }
 
+fn build_imgui_backends() {
+    let libdir_src_path = PathBuf::from("src/imgui")
+        .canonicalize()
+        .expect("cannot canonicalize path");
+
+    let libdir_dst_path_str = "bin/imgui-bin";
+    if !Path::new(libdir_dst_path_str).exists() {
+        std::fs::create_dir(&libdir_dst_path_str).expect("Failed to create output directory for imgui");
+    }
+
+    let libdir_dst_path = PathBuf::from(libdir_dst_path_str)
+        .canonicalize()
+        .expect("cannot canonicalize path");
+
+    let src_path = libdir_src_path.join("imgui_backend_wrapper.cpp");
+    let obj_path = libdir_dst_path.join("imgui_backend_wrapper.o");
+    let lib_path = libdir_dst_path.join("libimguibackend.a");
+
+    // todo: this should change based on the available compiler.
+    if !std::process::Command::new("clang++")
+        .arg("-std=c++17")
+        .arg("-g") //debug only
+        .arg("-c")
+        .arg("-o")
+        .arg(&obj_path)
+        .arg(&src_path)
+        .output()
+        .expect("could not spawn `clang`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not compile imgui backend object file");
+    }
+
+    // Run `ar` to generate the library
+    if !std::process::Command::new("ar")
+        .arg("rcs")
+        .arg(lib_path)
+        .arg(obj_path)
+        .output()
+        .expect("could not spawn `ar`")
+        .status
+        .success()
+    {
+        // Panic if the command was not successful.
+        panic!("could not emit library file");
+    }
+
+    // Tell cargo to tell rustc to link the vma lib
+    println!("cargo:rustc-link-search={}", libdir_dst_path.to_str().unwrap());
+    //println!("cargo:rustc-link-lib=dylib=stdc++");
+    println!("cargo:rustc-link-lib=imguibackend");
+}
+
 #[cfg(feature = "generator")]
 fn generate_imgui_bindings() {
     let bindings = gen_bindings(
         None,
         IMGUI_WRAPPER,
         vec![],
-        vec!["ig.*"],
+        vec!["ig.*", "ImGui.*"],
         vec!["Im.*"],
         vec!["Im.*"],
     );
@@ -413,9 +468,10 @@ fn gen_vulkan_bindings()
 
 fn main() {
     // build vendor libraries
-    build_imgui_lib();
     build_glfw_lib();
     build_vulkan_vma();
+    build_imgui_lib();
+    build_imgui_backends();
 
     // generate library bindings
     #[cfg(feature = "generator")]

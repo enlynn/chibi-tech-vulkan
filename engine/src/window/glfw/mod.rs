@@ -1,8 +1,13 @@
+//mod glfw_imgui;
+
+use std::ptr;
 use std::{ffi::CString, os::raw};
 
 use crate::window::WaylandSurface;
+use crate::util::ffi::call;
 
 use vendor::glfw::*;
+use vendor::imgui::*;
 
 pub struct WindowSystem
 {
@@ -23,6 +28,29 @@ impl WindowSystem {
             glfwInit();
             // Vulkan requires us to set NO_API
             glfwWindowHint(GLFW_CLIENT_API as i32, GLFW_NO_API as i32);
+
+            // imgui setup
+            igCreateContext(ptr::null_mut());
+
+            let io = { &mut *igGetIO() }; // gets a mutable reference
+            io.MouseDrawCursor = true; // enable software cursor. get a lot of rendering lag without it.
+            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard as i32;   // Enable Keyboard Controls
+            //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad  as i32;   // Enable Gamepad Controls
+            //todo: figure out
+            //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable as i32;       // Enable Docking
+            //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable as i32;     // Enable Multi-Viewport / Platform Windows
+
+            //note: i have a style somewhere in an old project.
+            igStyleColorsDark(ptr::null_mut());
+
+            // When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
+            let style = { &mut *igGetStyle() };
+            if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable as i32) != 0
+            {
+                style.WindowRounding = 0.0;
+                style.Colors[ImGuiCol_WindowBg as usize].w = 1.0;
+            }
+
         };
         return WindowSystem {};
     }
@@ -123,6 +151,8 @@ impl Window {
             panic!("Unsupported platform!");
             //SupportedPlatform::Unknown
         };
+
+        ig_glfw_init(window, true);
 
         return Window { handle: window, platform };
     }

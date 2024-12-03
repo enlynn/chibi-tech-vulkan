@@ -34,6 +34,11 @@ impl DescriptorLayoutBuilder {
     }
 }
 
+pub enum DescriptorAllocatorFlags {
+    None,
+    AllowFree,
+}
+
 pub struct PoolSizeRatio{
 	pub descriptor_type: VkDescriptorType,
 	pub ratio:           f32,
