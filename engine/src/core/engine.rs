@@ -69,6 +69,48 @@ impl Engine {
             return;
         }
 
+        // let's upload some test geometry
+        //
+        let mut upload_commands = renderer::RenderCommandBuffer::default();
+
+        {
+            use crate::math::{float3::*, float4::*};
+            use renderer::{Vertex, RenderCommand, CreateMeshInfo};
+
+            let mut vertices: [Vertex; 4] = [Vertex::default(); 4];
+
+            vertices[0].position = Float3{ x:  0.5, y: -0.5, z: 0.0 };
+            vertices[1].position = Float3{ x:  0.5, y:  0.5, z: 0.0 };
+            vertices[2].position = Float3{ x: -0.5, y: -0.5, z: 0.0 };
+            vertices[3].position = Float3{ x: -0.5, y:  0.5, z: 0.0 };
+
+            vertices[0].color = Float4{ x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+            vertices[1].color = Float4{ x: 0.5, y: 0.5, z: 0.5, w: 1.0 };
+            vertices[2].color = Float4{ x: 1.0, y: 0.0, z: 0.0, w: 1.0 };
+            vertices[3].color = Float4{ x: 0.0, y: 1.0, z: 0.0, w: 1.0 };
+
+            let indices: [u32; 6] = [
+                0, 1, 2, 2, 1, 3,
+            ];
+
+            let mesh_info = CreateMeshInfo{
+                vertices:     vertices.as_ptr(),
+                vertex_count: vertices.len(),
+                indices:      indices.as_ptr(),
+                index_count:  indices.len(),
+                engine_id:    0,
+            };
+
+            upload_commands.add_command(RenderCommand::CreateMesh(mesh_info));
+        }
+
+        self.render_system.borrow_mut().submit_render_commands(upload_commands);
+
+        // let's read back the command list
+        //   note: this will eventually be deferred.
+        //
+        // todo:
+
         //use std::time::{Duration, Instant};
         //let mut current_time = Instant::now();
 

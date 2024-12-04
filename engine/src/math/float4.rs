@@ -24,4 +24,8 @@ impl Float4 {
     pub fn one() -> Float4 {
         return Self::fill(1.0);
     }
+
+    pub fn dot(&self, v: Float4) -> Float {
+        self.x * v.x + self.y * v.y + self.z * v.z + self.w * v.w
+    }
 }

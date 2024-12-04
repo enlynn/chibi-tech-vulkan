@@ -168,11 +168,51 @@ impl GraphicsPipelineBuilder {
         self
     }
 
+    //
+    // Blending
+    //   outColor = srcColor * srcColorBlendFactor <op> dstColor * dstColorBlendFactor;
+    //
+    // VK_BLEND_FACTOR_ONE
+    //   outColor = 1.0
+    //
+    // VK_BLEND_FACTOR_SRC_ALPHA
+    //   outColor = srcColor.rgb * srcColor.a + dstColor.rgb * 1.0
+    //
+    // Alpha Blend
+    //   outColor = srcColor.rgb * srcColor.a + dstColor.rgb * (1.0 - srcColor.a)
+    //
+
     pub fn disable_blending(&mut self) -> &mut Self {
         // default write mask
         self.color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         // no blending
         self.color_blend_attachment.blendEnable    = VK_FALSE;
+
+        self
+    }
+
+    pub fn enabled_blending_additive(&mut self) -> &mut Self {
+        self.color_blend_attachment.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        self.color_blend_attachment.blendEnable         = VK_TRUE;
+        self.color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        self.color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        self.color_blend_attachment.colorBlendOp        = VK_BLEND_OP_ADD;
+        self.color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        self.color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        self.color_blend_attachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+
+        self
+    }
+
+    pub fn enabled_blending_alphablend(&mut self) -> &mut Self {
+        self.color_blend_attachment.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        self.color_blend_attachment.blendEnable         = VK_TRUE;
+        self.color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        self.color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        self.color_blend_attachment.colorBlendOp        = VK_BLEND_OP_ADD;
+        self.color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        self.color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        self.color_blend_attachment.alphaBlendOp        = VK_BLEND_OP_ADD;
 
         self
     }
@@ -196,6 +236,20 @@ impl GraphicsPipelineBuilder {
         self.depth_stencil.depthTestEnable       = VK_FALSE;
         self.depth_stencil.depthWriteEnable      = VK_FALSE;
         self.depth_stencil.depthCompareOp        = VK_COMPARE_OP_NEVER;
+        self.depth_stencil.depthBoundsTestEnable = VK_FALSE;
+        self.depth_stencil.stencilTestEnable     = VK_FALSE;
+        self.depth_stencil.front                 = VkStencilOpState::default();
+        self.depth_stencil.back                  = VkStencilOpState::default();
+        self.depth_stencil.minDepthBounds        = 0.0;
+        self.depth_stencil.maxDepthBounds        = 1.0;
+
+        self
+    }
+
+    pub fn enable_depth_test(&mut self, depth_write_enabled: bool, op: VkCompareOp) -> &mut Self {
+        self.depth_stencil.depthTestEnable       = VK_TRUE;
+        self.depth_stencil.depthWriteEnable      = if depth_write_enabled { VK_TRUE } else { VK_FALSE };
+        self.depth_stencil.depthCompareOp        = op;
         self.depth_stencil.depthBoundsTestEnable = VK_FALSE;
         self.depth_stencil.stencilTestEnable     = VK_FALSE;
         self.depth_stencil.front                 = VkStencilOpState::default();

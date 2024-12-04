@@ -1,6 +1,10 @@
 mod graphics;
 
-use crate::math::float4::*;
+use crate::math::{
+    float3::*,
+    float4::*,
+    float4x4::*,
+};
 use crate::util::ffi::*;
 
 use gpu_descriptors::DescriptorAllocatorFlags;
@@ -23,14 +27,39 @@ use std::ptr;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::str::FromStr;
+use std::collections::VecDeque;
 
 use vendor::vulkan::*;
 use vendor::imgui::*;
 
-#[derive(Clone, Copy)]
+// Render Commands
+//
+
+//#[derive(Clone, Copy)]
+pub struct CreateMeshInfo {
+    pub vertices:     *const Vertex,
+    pub vertex_count: usize,
+
+    pub indices:      *const u32,
+    pub index_count:  usize,
+
+    //todo: other mesh properties
+
+    // Some engine-id so that we can tell the engine the mesh has uploaded
+    pub engine_id:    u64,
+}
+
+pub struct ReadyMeshInfo {
+    engine_id:      u64,
+    render_mesh_id: u64,
+}
+
 pub enum RenderCommand{
+    // Engine -> Renderer Commands
+    //
+
     // Mesh-related commands
-    CreateMesh,
+    CreateMesh(CreateMeshInfo),
     DestroyMesh,
     HideMesh,
     ShowMesh,
@@ -42,23 +71,33 @@ pub enum RenderCommand{
     // Material-related commands
     CreateMaterial,
     DestroyMaterial,
+
+    // Renderer -> Engine Commands
+    //
+
+    ReadyMesh(ReadyMeshInfo),
 }
 
 pub struct RenderCommandBuffer{
-    commands: Vec<RenderCommand>,
+    commands: VecDeque<RenderCommand>,
 }
 
 impl Default for RenderCommandBuffer{
     fn default() -> Self{
         Self{
-            commands: Vec::<RenderCommand>::new(),
+            commands: VecDeque::<RenderCommand>::new(),
         }
     }
 }
 
-pub struct RendererCreateInfo {
-    pub surface: NativeSurface,
+impl RenderCommandBuffer {
+    pub fn add_command(&mut self, cmd: RenderCommand) {
+        self.commands.push_back(cmd);
+    }
 }
+
+// Per Frame State
+//
 
 struct PerFrameState{
     command_pool:   CommandPool,
@@ -68,6 +107,9 @@ struct PerFrameState{
 struct PerFrameData {
     state: RefCell<PerFrameState>, // i don't like this one bit...
 }
+
+// Compute Effects
+//
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -85,10 +127,51 @@ struct ComputeEffect {
 	pub push_data: ComputePushConstants,
 }
 
+// Mesh info
+//
+
+pub type MeshId = usize;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Vertex {
+    pub position: Float3,
+    pub uv_x:     f32,
+    //----------------- 16-byte boundary
+    pub normal:   Float3,
+    pub uv_y:     f32,
+    //----------------- 16-byte boundary
+    pub color:    Float4,
+    //----------------- 16-byte boundary
+}
+
+#[derive(Clone, Copy)]
+struct GpuMeshBuffers {
+    index_buffer:          AllocatedBuffer,
+    vertex_buffer:         AllocatedBuffer,
+    vertex_buffer_address: VkDeviceAddress,
+    index_count:           u32,
+}
+
+struct GpuDrawPushConstants {
+    world_matrix:  Float4x4,
+    vertex_buffer: VkDeviceAddress,
+}
+
+// Render System
+//
+
+const MAX_LOADED_MESHES: usize = 100;
+
+pub struct RendererCreateInfo {
+    pub surface: NativeSurface,
+}
+
 pub struct RenderSystem{
     device:      Device,
     swapchain:   Swapchain,
     scene_image: AllocatedImage,
+    depth_image: AllocatedImage,
 
     frame_data:  Vec<Rc<PerFrameData>>,
     frame_index: usize,
@@ -98,6 +181,9 @@ pub struct RenderSystem{
     draw_image_ds: VkDescriptorSet,
 
     // immediate context submission - not quite sure where to put this right now
+    //   This is largely used for an Upload Context for pushing data to the GPU.
+    //   Ideally, I would be using some sort of paged heap to push data instead
+    //   of waiting for every single mesh to upload before moving on.
     imm_fence:          Fence,
     imm_command_buffer: CommandBuffer,
     imm_command_pool:   CommandPool,
@@ -115,12 +201,43 @@ pub struct RenderSystem{
 	// for the triangle
 	triangle_pl:   VkPipelineLayout,
 	triangle_p:    VkPipeline,
+
+	// Mesh "System"
+	meshes:        [GpuMeshBuffers; MAX_LOADED_MESHES],
+	mesh_count:    usize,
+
+	// Outgoing Commands to the engine
+	//   Will probably want this as a mpsc::Sender once the Renderer gets put on its own thread.
+	outgoing_commands: RenderCommandBuffer,
 }
 
 enum ShaderStage {
     Vertex,
     Fragment,
     Compute,
+}
+
+impl Default for GpuMeshBuffers {
+    fn default() -> Self {
+        Self{
+            index_buffer:          AllocatedBuffer::default(),
+            vertex_buffer:         AllocatedBuffer::default(),
+            vertex_buffer_address: 0,
+            index_count:           0,
+        }
+    }
+}
+
+impl Default for Vertex {
+    fn default() -> Self {
+        Self{
+            position: Float3::zero(),
+            uv_x:     0.0,
+            normal:   Float3::zero(),
+            uv_y:     0.0,
+            color:    Float4::zero(),
+        }
+    }
 }
 
 fn load_shader_module(device: &Device, shader_name: &str, stage: ShaderStage) -> VkShaderModule {
@@ -178,6 +295,20 @@ impl RenderSystem {
             VK_IMAGE_ASPECT_COLOR_BIT)
     }
 
+    fn create_depth_image(device: &Device, extent: VkExtent3D) -> AllocatedImage {
+        let depth_format = device.get_depth_format();
+        let image_usages = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+        device.allocate_image_memory(
+            extent,
+            depth_format,
+            image_usages,
+            VMA_MEMORY_USAGE_GPU_ONLY,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+        )
+    }
+
     fn resize_device_resources(&mut self) {
         self.device.wait_idle();
 
@@ -185,7 +316,10 @@ impl RenderSystem {
         self.swapchain.validate();
 
         self.device.destroy_image_memory(&mut self.scene_image);
+        self.device.destroy_image_memory(&mut self.depth_image);
+
         self.scene_image = RenderSystem::create_scene_images(&self.device, self.swapchain.get_extent());
+        self.depth_image = RenderSystem::create_depth_image(&self.device,  self.swapchain.get_extent());
 
         self.device.clear_descriptor_allocator(&self.global_da);
         self.draw_image_ds = {
@@ -215,6 +349,7 @@ impl RenderSystem {
         let swapchain = device.create_swapchain(None);
 
         let scene_image = RenderSystem::create_scene_images(&device, swapchain.get_extent());
+        let depth_image = RenderSystem::create_depth_image(&device,  swapchain.get_extent());
 
         let init_frame_data = |device: &Device| -> PerFrameData {
             let command_pool =   device.create_command_pool(QueueType::Graphics);
@@ -352,7 +487,13 @@ impl RenderSystem {
 
         let triangle_pl = {
             let descriptors:    [VkDescriptorSetLayout; 0] = [];
-            let push_constants: [VkPushConstantRange;   0] = [];
+            let push_constants: [VkPushConstantRange;   1] = [
+                VkPushConstantRange{
+                    stageFlags: VK_SHADER_STAGE_VERTEX_BIT,
+                    offset:     0,
+                    size:       std::mem::size_of::<GpuDrawPushConstants>() as u32,
+                },
+            ];
 
             device.create_pipeline_layout(descriptors.as_slice(), push_constants.as_slice())
         };
@@ -374,12 +515,18 @@ impl RenderSystem {
             //no multisampling
                 .set_multisampling_none()
             //no blending
-                .disable_blending()
+                //.disable_blending()
+            // additive blending
+                .enabled_blending_additive()
+            // alpha blending
+                //.enabled_blending_alphablend()
             //no depth testing
-                .disable_depth_test()
+                //.disable_depth_test()
+            // enabled depth testing
+                .enable_depth_test(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
             //connect the image format we will draw into, from draw image
                 .set_color_attachment_format(scene_image.format)
-                .set_depth_format(VK_FORMAT_UNDEFINED);
+                .set_depth_format(depth_image.format);
 
             //finally build the pipeline
             builder.build(&device)
@@ -396,6 +543,7 @@ impl RenderSystem {
             device,
             swapchain,
             scene_image,
+            depth_image,
             frame_data,
             frame_index: 0,
             global_da,
@@ -411,6 +559,9 @@ impl RenderSystem {
             current_compute_effect: 1,
             triangle_pl,
             triangle_p,
+            meshes:            [GpuMeshBuffers::default(); MAX_LOADED_MESHES],
+            mesh_count:        0,
+            outgoing_commands: RenderCommandBuffer::default(),
         };
     }
 
@@ -420,16 +571,30 @@ impl RenderSystem {
 
     fn draw_geometry(&self, cmd_buffer: &mut CommandBuffer) {
         let color_attachment = make_color_attachment_info(self.scene_image.view, None, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+       	let depth_attachment = make_depth_attachment_info(self.depth_image.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
         let draw_extent = VkExtent2D{ width: self.scene_image.dims.width, height: self.scene_image.dims.height };
-        let render_info = make_rendering_info(draw_extent, &color_attachment, std::ptr::null());
+        let render_info = make_rendering_info(draw_extent, &color_attachment, &depth_attachment);
 
         cmd_buffer.begin_rendering(render_info);
 
         cmd_buffer.bind_graphics_pipeline(self.triangle_p);
         cmd_buffer.set_viewport(draw_extent.width, draw_extent.height, 0, 0);
         cmd_buffer.set_scissor(draw_extent.width, draw_extent.height);
-        cmd_buffer.draw(3, 1, 0, 0);
+        //cmd_buffer.draw(3, 1, 0, 0);
+
+        for i in 0..self.mesh_count {
+            let mesh = &self.meshes[i];
+
+            let push_consts = GpuDrawPushConstants {
+                world_matrix: Float4x4::identity(),
+                vertex_buffer: mesh.vertex_buffer_address,
+            };
+
+            cmd_buffer.bind_push_constants(self.triangle_pl, VK_SHADER_STAGE_VERTEX_BIT, push_consts, 0);
+            cmd_buffer.bind_index_buffer(&mesh.index_buffer);
+            cmd_buffer.draw_indexed(mesh.index_count, 1, 0, 0, 0);
+        }
 
         cmd_buffer.end_rendering();
     }
@@ -499,8 +664,43 @@ impl RenderSystem {
         call!(igEnd);
     }
 
-    pub fn render(&mut self, _command_buffer: RenderCommandBuffer) {
-        //todo: process incoming render commands
+    fn process_render_commands(&mut self, command_buffer: &RenderCommandBuffer) {
+        for command in &command_buffer.commands {
+            match command {
+                RenderCommand::CreateMesh(mesh_info) => {
+                    assert!(self.mesh_count < MAX_LOADED_MESHES - 1);
+
+                    let vertices = unsafe { std::slice::from_raw_parts(mesh_info.vertices, mesh_info.vertex_count) };
+                    let indices  = unsafe { std::slice::from_raw_parts(mesh_info.indices,  mesh_info.index_count)  };
+
+                    //note: this will evventually be deferred.
+                    let mesh = self.upload_mesh(indices, vertices);
+
+                    let mesh_id = self.mesh_count;
+
+                    self.meshes[self.mesh_count] = mesh;
+                    self.mesh_count += 1;
+
+                    let response = ReadyMeshInfo{
+                        engine_id:      mesh_info.engine_id,
+                        render_mesh_id: mesh_id as u64,
+                    };
+
+                    self.outgoing_commands.commands.push_back(RenderCommand::ReadyMesh(response));
+                },
+                default => {},
+            }
+        }
+    }
+
+    pub fn submit_render_commands(&mut self, render_command_buffer: RenderCommandBuffer) {
+        self.process_render_commands(&render_command_buffer);
+    }
+
+    pub fn render(&mut self, render_command_buffer: RenderCommandBuffer) {
+        if render_command_buffer.commands.len() > 0 {
+            self.process_render_commands(&render_command_buffer);
+        }
 
         // If the swapchain has been invalidated, recreate it. Will usually happen when we need to resize.
         if !self.swapchain.is_valid()
@@ -549,7 +749,7 @@ impl RenderSystem {
             let descriptors: [VkDescriptorSet; 1] = [ self.draw_image_ds ];
             command_buffer.bind_compute_descriptor_sets(compute_effect.layout, 0, descriptors.as_slice());
 
-            command_buffer.bind_push_constants(compute_effect.layout, compute_effect.push_data, 0);
+            command_buffer.bind_push_constants(compute_effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, compute_effect.push_data, 0);
 
             let group_x = self.scene_image.dims.width  as f32 / 16.0;
             let group_y = self.scene_image.dims.height as f32 / 16.0;
@@ -558,7 +758,9 @@ impl RenderSystem {
         }
 
         { // Draw geometry
-            command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            command_buffer.transition_image(self.scene_image.image, VK_IMAGE_LAYOUT_GENERAL,   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            command_buffer.transition_image(self.depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
             self.draw_geometry(&mut command_buffer);
         }
 
@@ -620,6 +822,12 @@ impl RenderSystem {
     pub fn destroy(&mut self) {
         self.device.wait_idle();
 
+        for i in 0..self.mesh_count {
+            let mesh = &mut self.meshes[i];
+            self.device.destroy_buffer(&mut mesh.index_buffer);
+            self.device.destroy_buffer(&mut mesh.vertex_buffer);
+        }
+
         self.device.destroy_imgui_editor(&mut self.editor_data);
 
         self.device.destroy_pipeline(self.triangle_p);
@@ -643,6 +851,7 @@ impl RenderSystem {
             self.device.destroy_command_pool(&mut frame_data.state.borrow_mut().command_pool);
         }
 
+        self.device.destroy_image_memory(&mut self.depth_image);
         self.device.destroy_image_memory(&mut self.scene_image);
         self.device.destroy_swapchain(&mut self.swapchain);
         self.device.destroy();
@@ -651,5 +860,45 @@ impl RenderSystem {
     pub fn on_resize(&mut self, width: u32, height: u32)
     {
         self.swapchain.on_resize(width, height);
+    }
+
+    fn upload_mesh(&mut self, indices: &[u32], vertices: &[Vertex]) -> GpuMeshBuffers {
+        let vertex_buffer_size = vertices.len() * std::mem::size_of::<Vertex>();
+        let index_buffer_size  = indices.len()  * std::mem::size_of::<u32>();
+
+        let vertex_buffer_flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        let index_buffer_flags  = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+        let mut result = GpuMeshBuffers::default();
+        result.index_buffer          = self.device.create_buffer(index_buffer_size, index_buffer_flags, VMA_MEMORY_USAGE_GPU_ONLY);
+        result.vertex_buffer         = self.device.create_buffer(vertex_buffer_size, vertex_buffer_flags, VMA_MEMORY_USAGE_GPU_ONLY);
+        result.vertex_buffer_address = self.device.get_buffer_device_address(&result.vertex_buffer);
+        result.index_count           = indices.len() as u32;
+
+       	let mut staging_buffer = self.device.create_buffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+
+        let mut memory = staging_buffer.info.pMappedData;
+        assert!(memory != ptr::null_mut());
+
+        // Copy vertex data to the staging buffer
+        let mut memory_as_vertex = memory as *mut Vertex;
+        unsafe { std::ptr::copy(vertices.as_ptr(), memory_as_vertex, vertices.len()) };
+
+        // Copy index data to the staging buffer
+        let mut memory_as_index = unsafe { memory.add(vertex_buffer_size) } as *mut u32;
+        unsafe { std::ptr::copy(indices.as_ptr(), memory_as_index, indices.len()) };
+
+        self.immediate_submit(
+            |command_buffer: &CommandBuffer| {
+                // Copy to the final vertex buffer
+                command_buffer.copy_buffer(&result.vertex_buffer, 0, &staging_buffer, 0, vertex_buffer_size as VkDeviceSize);
+                // Copy to the final index buffer
+                command_buffer.copy_buffer(&result.index_buffer, 0, &staging_buffer, vertex_buffer_size as VkDeviceSize, index_buffer_size as VkDeviceSize);
+            }
+        );
+
+        self.device.destroy_buffer(&mut staging_buffer);
+
+        return result;
     }
 }

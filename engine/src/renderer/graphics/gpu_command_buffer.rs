@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use crate::util::ffi::call;
 
-use super::gpu_utils::*;
+use super::{gpu_utils::*, AllocatedBuffer};
 
 use vendor::vulkan::*;
 
@@ -22,6 +22,9 @@ pub struct CommandBufferFnTable {
     pub cmd_set_viewport:         FN_vkCmdSetViewport,
     pub cmd_draw:                 FN_vkCmdDraw,
     pub cmd_push_constants:       FN_vkCmdPushConstants,
+    pub cmd_copy_buffer:          FN_vkCmdCopyBuffer,
+    pub cmd_bind_index_buffer:    FN_vkCmdBindIndexBuffer,
+    pub cmd_draw_indexed:         FN_vkCmdDrawIndexed,
 }
 
 #[derive(PartialEq)]
@@ -203,11 +206,11 @@ impl CommandBuffer {
             descriptor_sets.len() as u32, descriptor_sets.as_ptr(), 0, std::ptr::null());
     }
 
-    pub fn bind_push_constants<PushConstants>(&mut self, pipeline_layout: VkPipelineLayout, push_consts: PushConstants, offset: u32) {
+    pub fn bind_push_constants<PushConstants>(&mut self, pipeline_layout: VkPipelineLayout, stage: VkShaderStageFlagBits, push_consts: PushConstants, offset: u32) {
         assert!(self.state == CommandBufferState::Open);
 
         let consts_ptr: *const c_void = &push_consts as *const PushConstants as *const c_void;
-        call!(self.fns.cmd_push_constants, self.handle, pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, offset, std::mem::size_of::<PushConstants>() as u32, consts_ptr);
+        call!(self.fns.cmd_push_constants, self.handle, pipeline_layout, stage, offset, std::mem::size_of::<PushConstants>() as u32, consts_ptr);
     }
 
     pub fn dispatch_compute(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
@@ -255,5 +258,25 @@ impl CommandBuffer {
     pub fn draw(&self, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) {
         assert!(self.state == CommandBufferState::Open);
         call!(self.fns.cmd_draw, self.handle, vertex_count, instance_count, first_vertex, first_instance);
+    }
+
+    pub fn copy_buffer(&self, dst_buffer: &AllocatedBuffer, dst_offset: VkDeviceSize, src_buffer: &AllocatedBuffer, src_offset: VkDeviceSize, copy_size: VkDeviceSize) {
+        assert!(self.state == CommandBufferState::Open);
+
+        let copy_info = VkBufferCopy{
+            srcOffset: src_offset,
+            dstOffset: dst_offset,
+            size:      copy_size,
+        };
+
+        call!(self.fns.cmd_copy_buffer, self.handle, src_buffer.buffer, dst_buffer.buffer, 1, &copy_info);
+    }
+
+    pub fn bind_index_buffer(&self, index_buffer: &AllocatedBuffer) {
+        call!(self.fns.cmd_bind_index_buffer, self.handle, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    }
+
+    pub fn draw_indexed(&self, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) {
+        call!(self.fns.cmd_draw_indexed, self.handle, index_count, instance_count, first_index, vertex_offset, first_instance);
     }
 }

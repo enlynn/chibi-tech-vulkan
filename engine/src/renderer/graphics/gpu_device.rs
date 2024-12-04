@@ -10,6 +10,7 @@ use super::gpu_utils::{call_throw, call_nothrow};
 use super::gpu_command_pool::{CommandPool, CommandPoolFnTable};
 use super::gpu_command_buffer::{CommandBuffer, CommandBufferFnTable};
 use super::gpu_descriptors::*;
+use super::AllocatedBuffer;
 
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
@@ -1305,6 +1306,9 @@ impl Device {
             cmd_set_viewport:         self.fns.cmd_set_viewport,
             cmd_draw:                 self.fns.cmd_draw,
             cmd_push_constants:       self.fns.cmd_push_constants,
+            cmd_copy_buffer:          self.fns.cmd_copy_buffer,
+            cmd_bind_index_buffer:    self.fns.cmd_bind_index_buffer,
+            cmd_draw_indexed:         self.fns.cmd_draw_indexed,
         };
 
         return CommandBuffer::new(fn_table, unsafe { buffer.assume_init() });
@@ -1386,7 +1390,7 @@ impl Device {
         call_throw!(vmaCreateImage, self.allocator, &image_ci, &image_alloc_info, &mut result.image, &mut result.memory, ptr::null_mut());
 
         //build an image-view for the draw image to use for rendering
-        let image_view_ci = util::make_image_view_ci(result.format, result.image, VK_IMAGE_ASPECT_COLOR_BIT);
+        let image_view_ci = util::make_image_view_ci(result.format, result.image, image_aspect_flags);
 
         call_throw!(self.fns.create_image_view, self.handle, &image_view_ci, ptr::null_mut(), &mut result.view);
 
@@ -1597,5 +1601,39 @@ impl Device {
 
     pub fn wait_for_fences(&self, fence: super::Fence) {
         call_throw!(self.fns.wait_for_fences, self.handle, 1, &fence, VK_TRUE, 1000000000);
+    }
+
+    pub fn create_buffer(&self, alloc_size: usize, buffer_usage: VkBufferUsageFlags, memory_usage: VmaMemoryUsage) -> AllocatedBuffer {
+        let mut buffer_ci = VkBufferCreateInfo::default();
+        buffer_ci.size  = alloc_size as u64;
+        buffer_ci.usage = buffer_usage;
+
+        let mut vma_alloc_info = VmaAllocationCreateInfo::default();
+        vma_alloc_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        vma_alloc_info.usage = memory_usage;
+
+        let mut result = AllocatedBuffer::default();
+        call_throw!(vmaCreateBuffer, self.allocator, &buffer_ci, &vma_alloc_info, &mut result.buffer, &mut result.memory, &mut result.info);
+
+        return result;
+    }
+
+    pub fn destroy_buffer(&self, buffer: &mut AllocatedBuffer) {
+        call!(vmaDestroyBuffer, self.allocator, buffer.buffer, buffer.memory);
+        *buffer = AllocatedBuffer::default();
+    }
+
+    pub fn get_buffer_device_address(&self, buffer: &AllocatedBuffer) -> VkDeviceAddress {
+        let addr_info = VkBufferDeviceAddressInfo{
+            sType:  VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            pNext:  ptr::null(),
+            buffer: buffer.buffer,
+        };
+
+        return call!(self.fns.get_device_address, self.handle, &addr_info);
+    }
+
+    pub fn get_depth_format(&self) -> VkFormat {
+        self.gpu.select_depth_format()
     }
 }

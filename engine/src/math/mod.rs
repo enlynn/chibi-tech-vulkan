@@ -2,6 +2,7 @@ use rand::prelude::*;
 
 pub mod float3;
 pub mod float4;
+pub mod float4x4;
 
 use float3::Float3;
 

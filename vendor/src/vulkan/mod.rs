@@ -683,3 +683,32 @@ impl Default for VkRenderingInfo {
         }
     }
 }
+
+impl Default for VmaAllocationInfo {
+    fn default() -> Self {
+        Self{
+            memoryType:   0,
+            deviceMemory: ptr::null_mut(),
+            offset:       0,
+            size:         0,
+            pMappedData:  ptr::null_mut(),
+            pUserData:    ptr::null_mut(),
+            pName:        ptr::null(),
+        }
+    }
+}
+
+impl Default for VkBufferCreateInfo {
+    fn default() -> Self {
+        Self{
+            sType:                 VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            pNext:                 ptr::null(),
+            flags:                 0,
+            size:                  0,
+            usage:                 0,
+            sharingMode:           VK_SHARING_MODE_EXCLUSIVE,
+            queueFamilyIndexCount: 0,
+            pQueueFamilyIndices:   ptr::null(),
+        }
+    }
+}

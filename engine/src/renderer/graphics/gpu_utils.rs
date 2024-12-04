@@ -307,6 +307,9 @@ pub struct DeviceFnTable
     pub cmd_set_viewport:                FN_vkCmdSetViewport,
     pub cmd_draw:                        FN_vkCmdDraw,
     pub cmd_push_constants:              FN_vkCmdPushConstants,
+    pub get_device_address:              FN_vkGetBufferDeviceAddress,
+    pub cmd_bind_index_buffer:           FN_vkCmdBindIndexBuffer,
+    pub cmd_draw_indexed:                FN_vkCmdDrawIndexed,
 }
 
 /* ======================================================================== */
@@ -510,6 +513,9 @@ pub fn load_device_functions(gbl: &GlobalFnTable, inst: VkInstance, device: VkDe
         cmd_set_viewport:                get_device_procaddr!(vkCmdSetViewport),
         cmd_draw:                        get_device_procaddr!(vkCmdDraw),
         cmd_push_constants:              get_device_procaddr!(vkCmdPushConstants),
+        get_device_address:              get_device_procaddr!(vkGetBufferDeviceAddress),
+        cmd_bind_index_buffer:           get_device_procaddr!(vkCmdBindIndexBuffer),
+        cmd_draw_indexed:                get_device_procaddr!(vkCmdDrawIndexed),
     };
 
     Ok(funcs)

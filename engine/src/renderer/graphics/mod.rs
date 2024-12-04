@@ -24,6 +24,13 @@ pub struct AllocatedImage {
     pub format: api::VkFormat,
 }
 
+#[derive(Clone, Copy)]
+pub struct AllocatedBuffer {
+    pub buffer: api::VkBuffer,
+    pub memory: api::VmaAllocation,
+    pub info:   api::VmaAllocationInfo,
+}
+
 pub struct EditorRenderData {
     allocator: gpu_descriptors::DescriptorAllocator,
 }
@@ -36,6 +43,16 @@ impl Default for AllocatedImage {
             memory: std::ptr::null_mut(),
             dims:   api::VkExtent3D::default(),
             format: api::VK_FORMAT_UNDEFINED,
+        }
+    }
+}
+
+impl Default for AllocatedBuffer {
+    fn default() -> Self {
+        Self{
+            buffer: std::ptr::null_mut(),
+            memory: std::ptr::null_mut(),
+            info:   api::VmaAllocationInfo::default(),
         }
     }
 }
