@@ -10,6 +10,8 @@ pub mod gpu_command_buffer;
 pub mod gpu_descriptors;
 pub mod gpu_pipeline;
 
+use std::os::raw::c_void;
+
 use vendor::vulkan as api;
 
 pub type Semaphore         = api::VkSemaphore;
@@ -54,5 +56,11 @@ impl Default for AllocatedBuffer {
             memory: std::ptr::null_mut(),
             info:   api::VmaAllocationInfo::default(),
         }
+    }
+}
+
+impl AllocatedBuffer {
+    pub fn get_allocation(&self) -> *mut c_void {
+        self.info.pMappedData
     }
 }

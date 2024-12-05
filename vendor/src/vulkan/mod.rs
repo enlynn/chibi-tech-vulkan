@@ -712,3 +712,30 @@ impl Default for VkBufferCreateInfo {
         }
     }
 }
+
+impl Default for VkDescriptorBufferInfo {
+    fn default() -> Self {
+        Self{
+            buffer: ptr::null_mut(),
+            offset: 0,
+            range:  0,
+        }
+    }
+}
+
+impl Default for VkWriteDescriptorSet {
+    fn default() -> Self {
+        Self{
+            sType:            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            pNext:            ptr::null(),
+            dstSet:           ptr::null_mut(),
+            dstBinding:       0,
+            dstArrayElement:  0,
+            descriptorCount:  0,
+            descriptorType:   0,
+            pImageInfo:       ptr::null(),
+            pBufferInfo:      ptr::null(),
+            pTexelBufferView: ptr::null(),
+        }
+    }
+}

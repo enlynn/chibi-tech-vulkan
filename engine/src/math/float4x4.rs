@@ -8,6 +8,7 @@ use crate::math::{
 
 use super::degrees_to_radians;
 
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _Cols {
     c0: Float4,

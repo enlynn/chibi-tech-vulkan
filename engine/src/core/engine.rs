@@ -89,6 +89,16 @@ impl Engine {
             vertices[2].color = Float4{ x: 1.0, y: 0.0, z: 0.0, w: 1.0 };
             vertices[3].color = Float4{ x: 0.0, y: 1.0, z: 0.0, w: 1.0 };
 
+            vertices[0].uv_x = 1.0;
+            vertices[0].uv_y = 1.0;
+            vertices[1].uv_x = 1.0;
+            vertices[1].uv_y = 0.0;
+            vertices[2].uv_x = 0.0;
+            vertices[2].uv_y = 0.0;
+            vertices[3].uv_x = 0.0;
+            vertices[3].uv_y = 1.0;
+
+
             let indices: [u32; 6] = [
                 0, 1, 2, 2, 1, 3,
             ];

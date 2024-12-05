@@ -1309,6 +1309,7 @@ impl Device {
             cmd_copy_buffer:          self.fns.cmd_copy_buffer,
             cmd_bind_index_buffer:    self.fns.cmd_bind_index_buffer,
             cmd_draw_indexed:         self.fns.cmd_draw_indexed,
+            cmd_copy_buffer_to_image: self.fns.cmd_copy_buffer_to_image,
         };
 
         return CommandBuffer::new(fn_table, unsafe { buffer.assume_init() });
@@ -1371,9 +1372,17 @@ impl Device {
         image_usage:        VkImageUsageFlags,
         memory_usage:       VmaMemoryUsage,
         memory_props:       VkMemoryPropertyFlagBits,
-        image_aspect_flags: VkImageAspectFlagBits)    -> super::AllocatedImage
+        mipmapped:          bool)    -> super::AllocatedImage
     {
+        assert!(!mipmapped, "Mipmapping is not implemented yet");
+
         let mut result = super::AllocatedImage::default();
+
+        // select the aspect flags
+        let mut aspect_flag: VkImageAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+       	if format == VK_FORMAT_D32_SFLOAT {
+       		aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
+       	}
 
         //hardcoding the draw format to 32 bit float
         result.format = format;
@@ -1390,7 +1399,7 @@ impl Device {
         call_throw!(vmaCreateImage, self.allocator, &image_ci, &image_alloc_info, &mut result.image, &mut result.memory, ptr::null_mut());
 
         //build an image-view for the draw image to use for rendering
-        let image_view_ci = util::make_image_view_ci(result.format, result.image, image_aspect_flags);
+        let image_view_ci = util::make_image_view_ci(result.format, result.image, aspect_flag);
 
         call_throw!(self.fns.create_image_view, self.handle, &image_view_ci, ptr::null_mut(), &mut result.view);
 
@@ -1467,7 +1476,7 @@ impl Device {
         allocator.pool = ptr::null_mut();
     }
 
-    pub fn allocate_descriptors(&self, allocator: &DescriptorAllocator, layout: VkDescriptorSetLayout) -> VkDescriptorSet {
+    pub fn allocate_descriptors(&self, allocator: &DescriptorAllocator, layout: VkDescriptorSetLayout) -> Option<VkDescriptorSet> {
         let set_ci = VkDescriptorSetAllocateInfo{
             sType:              VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             pNext:              ptr::null(),
@@ -1477,28 +1486,18 @@ impl Device {
         };
 
         let mut set: MaybeUninit<_> = MaybeUninit::<VkDescriptorSet>::uninit();
-        call_throw!(self.fns.alloc_descriptor_sets, self.handle, &set_ci, set.as_mut_ptr());
+        let result = call_nothrow!(self.fns.alloc_descriptor_sets, self.handle, &set_ci, set.as_mut_ptr());
 
-        return unsafe { set.assume_init() };
+        if result != VK_SUCCESS {
+            return None;
+        } else {
+            return Some(unsafe { set.assume_init() });
+        }
     }
 
-    pub fn update_descriptor_sets(&self, image_info: VkDescriptorImageInfo, set: VkDescriptorSet, set_count: u32, set_binding: u32, set_offset: u32, descriptor_type: VkDescriptorType) {
-        let draw_write = VkWriteDescriptorSet{
-            sType:            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            pNext:            ptr::null(),
-            dstSet:           set,
-            dstBinding:       set_binding,
-            dstArrayElement:  set_offset,
-            descriptorCount:  set_count,
-            descriptorType:   descriptor_type,
-            pImageInfo:       &image_info,
-            pBufferInfo:      ptr::null(),
-            pTexelBufferView: ptr::null(),
-        };
-
-        let descriptor_write_count = 1;
+    pub fn update_descriptor_sets(&self, write_infos: &[VkWriteDescriptorSet]) {
         let descriptor_copy_count  = 0;
-        call!(self.fns.update_descriptor_sets, self.handle, descriptor_write_count, &draw_write, descriptor_copy_count, ptr::null());
+        call!(self.fns.update_descriptor_sets, self.handle, write_infos.len() as u32, write_infos.as_ptr(), descriptor_copy_count, ptr::null());
     }
 
     pub fn create_shader_module(&self, shader_code: &[u8]) -> Option<VkShaderModule> {
@@ -1635,5 +1634,37 @@ impl Device {
 
     pub fn get_depth_format(&self) -> VkFormat {
         self.gpu.select_depth_format()
+    }
+
+    pub fn create_sampler(&self, mag_filter: VkFilter, min_filter: VkFilter) -> VkSampler {
+        let sampler_ci = VkSamplerCreateInfo{
+            sType:                   VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            pNext:                   ptr::null(),
+            flags:                   0,
+            magFilter:               mag_filter,
+            minFilter:               min_filter,
+            mipmapMode:              VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            addressModeU:            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            addressModeV:            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            addressModeW:            VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            mipLodBias:              0.0,
+            anisotropyEnable:        VK_FALSE,
+            maxAnisotropy:           0.0,
+            compareEnable:           VK_FALSE,
+            compareOp:               VK_COMPARE_OP_NEVER,
+            minLod:                  0.0,
+            maxLod:                  0.0,
+            borderColor:             VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+            unnormalizedCoordinates: VK_FALSE,
+        };
+
+        let mut sampler: MaybeUninit<_> = MaybeUninit::<VkSampler>::uninit();
+        call_throw!(self.fns.create_sampler, self.handle, &sampler_ci, ptr::null(), sampler.as_mut_ptr());
+
+        return unsafe { sampler.assume_init() };
+    }
+
+    pub fn destroy_sampler(&self, sampler: VkSampler) {
+        call!(self.fns.destroy_sampler, self.handle, sampler, ptr::null());
     }
 }

@@ -310,6 +310,8 @@ pub struct DeviceFnTable
     pub get_device_address:              FN_vkGetBufferDeviceAddress,
     pub cmd_bind_index_buffer:           FN_vkCmdBindIndexBuffer,
     pub cmd_draw_indexed:                FN_vkCmdDrawIndexed,
+    pub cmd_copy_buffer_to_image:        FN_vkCmdCopyBufferToImage,
+    pub destroy_sampler:                 FN_vkDestroySampler,
 }
 
 /* ======================================================================== */
@@ -516,6 +518,8 @@ pub fn load_device_functions(gbl: &GlobalFnTable, inst: VkInstance, device: VkDe
         get_device_address:              get_device_procaddr!(vkGetBufferDeviceAddress),
         cmd_bind_index_buffer:           get_device_procaddr!(vkCmdBindIndexBuffer),
         cmd_draw_indexed:                get_device_procaddr!(vkCmdDrawIndexed),
+        cmd_copy_buffer_to_image:        get_device_procaddr!(vkCmdCopyBufferToImage),
+        destroy_sampler:                 get_device_procaddr!(vkDestroySampler),
     };
 
     Ok(funcs)

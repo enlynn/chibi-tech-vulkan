@@ -16,7 +16,7 @@ use graphics::{
     gpu_utils::*,
     gpu_command_pool::CommandPool,
     gpu_command_buffer::CommandBuffer,
-    gpu_descriptors::{DescriptorAllocator, DescriptorLayoutBuilder, PoolSizeRatio},
+    gpu_descriptors::*,
     gpu_pipeline::*,
 };
 
@@ -99,13 +99,20 @@ impl RenderCommandBuffer {
 // Per Frame State
 //
 
-struct PerFrameState{
-    command_pool:   CommandPool,
-    command_buffer: CommandBuffer,
+struct PerFrameCommandBuffer {
+    pool:   CommandPool,
+    handle: CommandBuffer,
+}
+
+struct PerFrameDeletionQueues {
+    buffer_deletion_queue: VecDeque<AllocatedBuffer>,
+    image_deletion_queue:  VecDeque<AllocatedImage>,
 }
 
 struct PerFrameData {
-    state: RefCell<PerFrameState>, // i don't like this one bit...
+    command_buffer:      RefCell<PerFrameCommandBuffer>, // i don't like this one bit...
+    dynamic_descriptors: RefCell<DescriptorAllocatorGrowable>,
+    deletion_queues:     RefCell<PerFrameDeletionQueues>,
 }
 
 // Compute Effects
@@ -118,6 +125,21 @@ struct ComputePushConstants {
     data2: Float4,
     data3: Float4,
     data4: Float4,
+}
+
+#[repr(C)]
+struct GlobalSceneData {
+    view:           Float4x4,
+    //----------------- 16-byte boundary
+    proj:           Float4x4,
+    //----------------- 16-byte boundary
+    view_proj:      Float4x4,
+    //----------------- 16-byte boundary
+    ambient_color:  Float4,
+    sunlight_dir:   Float4,
+    sunlight_color: Float4,
+    padding0:       Float4,
+    //----------------- 16-byte boundary
 }
 
 struct ComputeEffect {
@@ -180,6 +202,9 @@ pub struct RenderSystem{
     draw_image_dl: VkDescriptorSetLayout,
     draw_image_ds: VkDescriptorSet,
 
+    scene_data:      GlobalSceneData,
+    global_scene_dl: VkDescriptorSetLayout,
+
     // immediate context submission - not quite sure where to put this right now
     //   This is largely used for an Upload Context for pushing data to the GPU.
     //   Ideally, I would be using some sort of paged heap to push data instead
@@ -199,12 +224,22 @@ pub struct RenderSystem{
 	current_compute_effect: usize,
 
 	// for the triangle
-	triangle_pl:   VkPipelineLayout,
-	triangle_p:    VkPipeline,
+	single_image_dl: VkDescriptorSetLayout,
+	triangle_pl:     VkPipelineLayout,
+	triangle_p:      VkPipeline,
 
 	// Mesh "System"
 	meshes:        [GpuMeshBuffers; MAX_LOADED_MESHES],
 	mesh_count:    usize,
+
+	// Texture "System"
+	white_image:              AllocatedImage,
+	black_image:              AllocatedImage,
+	grey_image:               AllocatedImage,
+	error_checkerboard_image: AllocatedImage,
+
+	default_sampler_linear:   VkSampler,
+	default_sampler_nearest:  VkSampler,
 
 	// Outgoing Commands to the engine
 	//   Will probably want this as a mpsc::Sender once the Renderer gets put on its own thread.
@@ -236,6 +271,20 @@ impl Default for Vertex {
             normal:   Float3::zero(),
             uv_y:     0.0,
             color:    Float4::zero(),
+        }
+    }
+}
+
+impl Default for GlobalSceneData {
+    fn default() -> Self {
+        Self{
+            view:           Float4x4::identity(),
+            proj:           Float4x4::identity(),
+            view_proj:      Float4x4::identity(),
+            ambient_color:  Float4::zero(),
+            sunlight_dir:   Float4::zero(),
+            sunlight_color: Float4::zero(),
+            padding0:       Float4::zero(),
         }
     }
 }
@@ -292,7 +341,8 @@ impl RenderSystem {
             image_usages,
             VMA_MEMORY_USAGE_GPU_ONLY,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT)
+            false,
+        )
     }
 
     fn create_depth_image(device: &Device, extent: VkExtent3D) -> AllocatedImage {
@@ -305,7 +355,7 @@ impl RenderSystem {
             image_usages,
             VMA_MEMORY_USAGE_GPU_ONLY,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            VK_IMAGE_ASPECT_DEPTH_BIT,
+            false,
         )
     }
 
@@ -323,13 +373,11 @@ impl RenderSystem {
 
         self.device.clear_descriptor_allocator(&self.global_da);
         self.draw_image_ds = {
-            let ds = self.device.allocate_descriptors(&self.global_da, self.draw_image_dl);
+            let ds = self.device.allocate_descriptors(&self.global_da, self.draw_image_dl).expect("Failed to alloc descriptor set");
 
-            let mut image_info = VkDescriptorImageInfo::default();
-            image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            image_info.imageView   = self.scene_image.view;
-
-            self.device.update_descriptor_sets(image_info, ds, 1, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            let mut writer = DescriptorWriter::new();
+            writer.write_storage_image(0, self.scene_image.view, VK_IMAGE_LAYOUT_GENERAL);
+            writer.update_set(&self.device, ds);
 
             ds
         };
@@ -352,9 +400,24 @@ impl RenderSystem {
         let depth_image = RenderSystem::create_depth_image(&device,  swapchain.get_extent());
 
         let init_frame_data = |device: &Device| -> PerFrameData {
-            let command_pool =   device.create_command_pool(QueueType::Graphics);
-            let command_buffer = device.create_command_buffer(&command_pool);
-            PerFrameData{ state: RefCell::new(PerFrameState { command_pool, command_buffer }) }
+            let pool =   device.create_command_pool(QueueType::Graphics);
+            let buffer = device.create_command_buffer(&pool);
+
+            let sizes: [PoolSizeRatio; 4] = [
+                PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          ratio: 3.0 },
+                PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         ratio: 3.0 },
+                PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         ratio: 3.0 },
+                PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, ratio: 4.0 },
+            ];
+
+            PerFrameData{
+                command_buffer:      RefCell::new(PerFrameCommandBuffer {pool, handle: buffer}),
+                dynamic_descriptors: RefCell::new(DescriptorAllocatorGrowable::new(device, &sizes, 1000)),
+                deletion_queues:     RefCell::new(PerFrameDeletionQueues{
+                    buffer_deletion_queue: VecDeque::new(),
+                    image_deletion_queue:  VecDeque::new(),
+                }),
+            }
         };
 
         let mut frame_data = Vec::<Rc<PerFrameData>>::with_capacity(swapchain.images.len());
@@ -388,15 +451,19 @@ impl RenderSystem {
         };
 
         let draw_image_ds = {
-            let ds = device.allocate_descriptors(&global_da, draw_image_dl);
+            let ds = device.allocate_descriptors(&global_da, draw_image_dl).expect("Failed to alloc descriptor set");
 
-            let mut image_info = VkDescriptorImageInfo::default();
-            image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-            image_info.imageView   = scene_image.view;
-
-            device.update_descriptor_sets(image_info, ds, 1, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            let mut writer = DescriptorWriter::new();
+            writer.write_storage_image(0, scene_image.view, VK_IMAGE_LAYOUT_GENERAL);
+            writer.update_set(&device, ds);
 
             ds
+        };
+
+        let gpu_global_scene_dl = {
+            let mut build = DescriptorLayoutBuilder::new();
+            build.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            build.build(&device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0)
         };
 
         // The Compute Pipeline
@@ -485,8 +552,15 @@ impl RenderSystem {
         let colored_tri_vert_sm = load_shader_module(&device, "colored_triangle", ShaderStage::Vertex);
         let colored_tri_frag_sm = load_shader_module(&device, "colored_triangle", ShaderStage::Fragment);
 
+        //todo:VkDescriptorSetLayout _singleImageDescriptorLayout;
+        let single_image_dl = {
+            let mut builder = DescriptorLayoutBuilder::new();
+            builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            builder.build(&device, VK_SHADER_STAGE_FRAGMENT_BIT, 0)
+        };
+
         let triangle_pl = {
-            let descriptors:    [VkDescriptorSetLayout; 0] = [];
+            let descriptors:    [VkDescriptorSetLayout; 1] = [ single_image_dl ];
             let push_constants: [VkPushConstantRange;   1] = [
                 VkPushConstantRange{
                     stageFlags: VK_SHADER_STAGE_VERTEX_BIT,
@@ -515,9 +589,9 @@ impl RenderSystem {
             //no multisampling
                 .set_multisampling_none()
             //no blending
-                //.disable_blending()
+                .disable_blending()
             // additive blending
-                .enabled_blending_additive()
+                //.enabled_blending_additive()
             // alpha blending
                 //.enabled_blending_alphablend()
             //no depth testing
@@ -535,11 +609,17 @@ impl RenderSystem {
         device.destroy_shader_module(colored_tri_vert_sm);
         device.destroy_shader_module(colored_tri_frag_sm);
 
+        // Some Default samplers
+        //
+
+        let nearest_sampler = device.create_sampler(VK_FILTER_NEAREST, VK_FILTER_NEAREST);
+        let linear_sampler  = device.create_sampler(VK_FILTER_LINEAR,  VK_FILTER_LINEAR);
+
         // Setup imgui
         //
         let editor_data = device.create_imgui_editor(swapchain.get_image_count() as u32);
 
-        return RenderSystem{
+        let mut result = RenderSystem{
             device,
             swapchain,
             scene_image,
@@ -549,6 +629,8 @@ impl RenderSystem {
             global_da,
             draw_image_dl,
             draw_image_ds,
+            scene_data:      GlobalSceneData::default(),
+            global_scene_dl: gpu_global_scene_dl,
             imm_fence,
             imm_command_pool,
             imm_command_buffer,
@@ -557,12 +639,64 @@ impl RenderSystem {
             gradient_p,
             compute_effects:        vec![compute_effect_gradient, sky_effect],
             current_compute_effect: 1,
+            single_image_dl,
             triangle_pl,
             triangle_p,
-            meshes:            [GpuMeshBuffers::default(); MAX_LOADED_MESHES],
-            mesh_count:        0,
-            outgoing_commands: RenderCommandBuffer::default(),
+            meshes:                   [GpuMeshBuffers::default(); MAX_LOADED_MESHES],
+            mesh_count:               0,
+            white_image:              AllocatedImage::default(),
+            black_image:              AllocatedImage::default(),
+            grey_image:               AllocatedImage::default(),
+            error_checkerboard_image: AllocatedImage::default(),
+            default_sampler_linear:   linear_sampler,
+            default_sampler_nearest:  nearest_sampler,
+            outgoing_commands:        RenderCommandBuffer::default(),
         };
+
+        // Let's create some test images
+        //
+
+        let white_image = {
+            let packed_color = Float4::one().pack_unorm_u32();
+            let packed_ptr = (&packed_color as *const u32) as *const u8;
+
+            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+        };
+
+        let grey_image = {
+            let packed_color = Float4::new(0.66, 0.66, 0.66, 1.0).pack_unorm_u32();
+            let packed_ptr = (&packed_color as *const u32) as *const u8;
+
+            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+        };
+
+        let black_image = {
+            let packed_color = Float4::zero().pack_unorm_u32();
+            let packed_ptr = (&packed_color as *const u32) as *const u8;
+
+            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+        };
+
+        let checkerboard = {
+            let packed_magenta = Float4::new(1.0, 0.0, 1.0, 1.0).pack_unorm_u32();
+            let packed_black   = Float4::zero().pack_unorm_u32();
+
+            let mut pixels: [u32; 16*16] = [0; 16*16];
+            for x in 0..16 {
+          		for y in 0..16 {
+         			pixels[y*16 + x] = if ((x % 2) ^ (y % 2) > 0) { packed_magenta } else { packed_black };
+          		}
+            }
+
+            result.upload_image(pixels.as_ptr() as *const u8, VkExtent3D{ width: 16, height: 16, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+        };
+
+        result.white_image = white_image;
+        result.grey_image  = grey_image;
+        result.black_image = black_image;
+        result.error_checkerboard_image = checkerboard;
+
+        return result;
     }
 
     fn get_frame_data(&self) -> Rc<PerFrameData> {
@@ -570,6 +704,30 @@ impl RenderSystem {
     }
 
     fn draw_geometry(&self, cmd_buffer: &mut CommandBuffer) {
+        if false { // Example of dynamically allocating descriptors / transient buffer memory
+            // This is, like, definately not how I want to do this.
+            let frame_data = self.get_frame_data();
+            let mut deletion_queues = frame_data.deletion_queues.borrow_mut();
+            let mut dyn_descriptors = frame_data.dynamic_descriptors.borrow_mut();
+
+            let scene_data = self.device.create_buffer(std::mem::size_of::<GlobalSceneData>(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+            deletion_queues.buffer_deletion_queue.push_back(scene_data);
+
+            // Copy the scene data to the gpu buffer
+            let mut memory = scene_data.get_allocation();
+            assert!(memory != ptr::null_mut());
+
+            let mut memory_as_scene = memory as *mut GlobalSceneData;
+            unsafe { std::ptr::copy(&self.scene_data, memory_as_scene, 1) };
+
+            //create a descriptor set that binds that buffer and update it
+           	let global_ds = dyn_descriptors.allocate(&self.device, self.global_scene_dl);
+
+           	let mut writer = DescriptorWriter::new();
+           	writer.write_buffer(0, scene_data.buffer, std::mem::size_of::<GlobalSceneData>() as u64, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+           	writer.update_set(&self.device, global_ds);
+        }
+
         let color_attachment = make_color_attachment_info(self.scene_image.view, None, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
        	let depth_attachment = make_depth_attachment_info(self.depth_image.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -581,7 +739,21 @@ impl RenderSystem {
         cmd_buffer.bind_graphics_pipeline(self.triangle_p);
         cmd_buffer.set_viewport(draw_extent.width, draw_extent.height, 0, 0);
         cmd_buffer.set_scissor(draw_extent.width, draw_extent.height);
-        //cmd_buffer.draw(3, 1, 0, 0);
+
+        // let's bind a texture!
+        {
+            let frame_data = self.get_frame_data();
+            let mut dyn_descriptors = frame_data.dynamic_descriptors.borrow_mut();
+
+           	let image_set = dyn_descriptors.allocate(&self.device, self.single_image_dl);
+
+            let mut writer = DescriptorWriter::new();
+           	writer.write_combined_image_sampler(0, self.error_checkerboard_image.view, self.default_sampler_nearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+           	writer.update_set(&self.device, image_set);
+
+            let sets: [VkDescriptorSet; 1] = [image_set];
+            cmd_buffer.bind_graphics_descriptor_sets(self.triangle_pl, 0, &sets);
+        }
 
         for i in 0..self.mesh_count {
             let mesh = &self.meshes[i];
@@ -688,6 +860,7 @@ impl RenderSystem {
 
                     self.outgoing_commands.commands.push_back(RenderCommand::ReadyMesh(response));
                 },
+
                 default => {},
             }
         }
@@ -713,16 +886,35 @@ impl RenderSystem {
             return; // try again next frame
         }
 
-        // todo: process per-frame garbage
+        let frame_data  = self.get_frame_data();
+
+        // Process per-frame garbage
         //
+
+        {
+            let mut dyn_descriptors = frame_data.dynamic_descriptors.borrow_mut();
+            dyn_descriptors.clear_pools(&self.device);
+        }
+
+        {
+            let mut deletion_queues = frame_data.deletion_queues.borrow_mut();
+            for buffer in &mut deletion_queues.buffer_deletion_queue {
+                self.device.destroy_buffer(buffer);
+            }
+
+            for image in &mut deletion_queues.image_deletion_queue {
+                self.device.destroy_image_memory(image);
+            }
+
+            deletion_queues.buffer_deletion_queue.clear();
+            deletion_queues.image_deletion_queue.clear();
+        }
 
         // Render the Frame
         //
 
-        let frame_data  = self.get_frame_data();
-        let mut frame_state = frame_data.state.borrow_mut();
-
-        let mut command_buffer = &mut frame_state.command_buffer;
+        let mut command_buffer_state = frame_data.command_buffer.borrow_mut();
+        let mut command_buffer = &mut command_buffer_state.handle;
 
         command_buffer.reset();
         command_buffer.begin_recording();
@@ -828,10 +1020,18 @@ impl RenderSystem {
             self.device.destroy_buffer(&mut mesh.vertex_buffer);
         }
 
+        self.device.destroy_image_memory(&mut self.white_image);
+        self.device.destroy_image_memory(&mut self.black_image);
+        self.device.destroy_image_memory(&mut self.grey_image);
+        self.device.destroy_image_memory(&mut self.error_checkerboard_image);
+        self.device.destroy_sampler(self.default_sampler_linear);
+        self.device.destroy_sampler(self.default_sampler_nearest);
+
         self.device.destroy_imgui_editor(&mut self.editor_data);
 
         self.device.destroy_pipeline(self.triangle_p);
         self.device.destroy_pipeline_layout(self.triangle_pl);
+        self.device.destroy_descriptor_set_layout(self.single_image_dl);
 
         self.device.destroy_pipeline(self.gradient_p);
         self.device.destroy_pipeline_layout(self.gradient_pl);
@@ -843,12 +1043,32 @@ impl RenderSystem {
 
         self.device.destroy_descriptor_allocator(&mut self.global_da);
         self.device.destroy_descriptor_set_layout(self.draw_image_dl);
+        self.device.destroy_descriptor_set_layout(self.global_scene_dl);
 
         self.device.destroy_fence(&mut self.imm_fence);
         self.device.destroy_command_pool(&mut self.imm_command_pool);
 
         for frame_data in &self.frame_data{
-            self.device.destroy_command_pool(&mut frame_data.state.borrow_mut().command_pool);
+            self.device.destroy_command_pool(&mut frame_data.command_buffer.borrow_mut().pool);
+
+            {
+                let mut dyn_descriptors = frame_data.dynamic_descriptors.borrow_mut();
+                dyn_descriptors.destroy(&self.device);
+            }
+
+            {
+                let mut deletion_queues = frame_data.deletion_queues.borrow_mut();
+                for buffer in &mut deletion_queues.buffer_deletion_queue {
+                    self.device.destroy_buffer(buffer);
+                }
+
+                for image in &mut deletion_queues.image_deletion_queue {
+                    self.device.destroy_image_memory(image);
+                }
+
+                deletion_queues.buffer_deletion_queue.clear();
+                deletion_queues.image_deletion_queue.clear();
+            }
         }
 
         self.device.destroy_image_memory(&mut self.depth_image);
@@ -900,5 +1120,39 @@ impl RenderSystem {
         self.device.destroy_buffer(&mut staging_buffer);
 
         return result;
+    }
+
+    fn upload_image(&mut self, data: *const u8, size: VkExtent3D, format: VkFormat, usage: VkImageUsageFlags, mipmapped: bool) -> AllocatedImage {
+        let bytes_per_pixel = 4; //todo: determine based on VkFormat
+        let data_size = size.width * size.height * size.depth * bytes_per_pixel;
+
+       	let mut upload_buffer = self.device.create_buffer(data_size as usize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+        // copy the pixels into the upload buffer
+        let upload_memory = upload_buffer.get_allocation();
+        assert!(upload_memory != ptr::null_mut());
+
+        let mut memory_as_bytes = upload_memory as *mut u8;
+        unsafe { std::ptr::copy(data, memory_as_bytes, data_size as usize) };
+
+        let result = self.device.allocate_image_memory(
+            size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mipmapped);
+
+        self.immediate_submit(
+            |command_buffer: &CommandBuffer| {
+          		command_buffer.transition_image(result.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                command_buffer.copy_buffer_to_image(&upload_buffer, &result, size);
+                command_buffer.transition_image(result.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            }
+        );
+
+        self.device.destroy_buffer(&mut upload_buffer);
+
+        return result;
+    }
+
+    fn destroy_image(&mut self, mut image: &mut AllocatedImage) {
+        self.device.destroy_image_memory(&mut image);
     }
 }

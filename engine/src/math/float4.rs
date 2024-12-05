@@ -28,4 +28,20 @@ impl Float4 {
     pub fn dot(&self, v: Float4) -> Float {
         self.x * v.x + self.y * v.y + self.z * v.z + self.w * v.w
     }
+
+    pub fn pack_unorm_u32(&self) -> u32 {
+        let x = (self.x.clamp(0.0, 1.0) * 255.0) as u8;
+        let y = (self.y.clamp(0.0, 1.0) * 255.0) as u8;
+        let z = (self.z.clamp(0.0, 1.0) * 255.0) as u8;
+        let w = (self.w.clamp(0.0, 1.0) * 255.0) as u8;
+
+        #[repr(C)]
+        union PackedByte {
+            array: [u8; 4],
+            val:   u32,
+        }
+
+        let packed = PackedByte{ array: [x, y, z, w] };
+        return unsafe { packed.val };
+    }
 }

@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use crate::util::ffi::call;
 
-use super::{gpu_utils::*, AllocatedBuffer};
+use super::{gpu_utils::*, AllocatedBuffer, AllocatedImage};
 
 use vendor::vulkan::*;
 
@@ -25,6 +25,7 @@ pub struct CommandBufferFnTable {
     pub cmd_copy_buffer:          FN_vkCmdCopyBuffer,
     pub cmd_bind_index_buffer:    FN_vkCmdBindIndexBuffer,
     pub cmd_draw_indexed:         FN_vkCmdDrawIndexed,
+    pub cmd_copy_buffer_to_image: FN_vkCmdCopyBufferToImage,
 }
 
 #[derive(PartialEq)]
@@ -123,60 +124,6 @@ impl CommandBuffer {
         call!(self.fns.cmd_clear_color_image, self.handle, image, VK_IMAGE_LAYOUT_GENERAL, clear_value, 1, &clear_range);
     }
 
-    pub fn copy_image_to_image(&self,
-        source:      VkImage, src_size: VkExtent2D,
-        destination: VkImage, dst_size: VkExtent2D)
-    {
-        assert!(self.state == CommandBufferState::Open);
-
-        let blit_region = VkImageBlit2{
-            sType:          VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-            pNext:          std::ptr::null(),
-            srcSubresource: VkImageSubresourceLayers{
-                aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
-                mipLevel:       0,
-                baseArrayLayer: 0,
-                layerCount:     1,
-            },
-            srcOffsets:     [
-                VkOffset3D::default(),
-                VkOffset3D{
-                    x: src_size.width  as i32,
-                    y: src_size.height as i32,
-                    z: 1,
-                },
-            ],
-            dstSubresource: VkImageSubresourceLayers{
-                aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
-                mipLevel:       0,
-                baseArrayLayer: 0,
-                layerCount:     1,
-            },
-            dstOffsets:     [
-                VkOffset3D::default(),
-                VkOffset3D{
-                    x: dst_size.width  as i32,
-                    y: dst_size.height as i32,
-                    z: 1,
-                },
-            ],
-        };
-
-        let blit_info = VkBlitImageInfo2{
-            sType:          VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-            pNext:          std::ptr::null(),
-            srcImage:       source,
-            srcImageLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            dstImage:       destination,
-            dstImageLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            regionCount:    1,
-            pRegions:       &blit_region,
-            filter:         VK_FILTER_LINEAR,
-        };
-
-        call!(self.fns.cmd_blit_image2, self.handle, &blit_info);
-    }
-
     pub fn bind_compute_pipeline(&mut self, pipeline: VkPipeline) {
         assert!(self.state == CommandBufferState::Open);
 
@@ -203,6 +150,15 @@ impl CommandBuffer {
         //todo: dynamic descriptor sets
 
         call!(self.fns.cmd_bind_descriptor_sets, self.handle, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, first_set,
+            descriptor_sets.len() as u32, descriptor_sets.as_ptr(), 0, std::ptr::null());
+    }
+
+    pub fn bind_graphics_descriptor_sets(&mut self, pipeline_layout: VkPipelineLayout, first_set: u32, descriptor_sets: &[VkDescriptorSet]) {
+        assert!(self.state == CommandBufferState::Open);
+
+        //todo: dynamic descriptor sets
+
+        call!(self.fns.cmd_bind_descriptor_sets, self.handle, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, first_set,
             descriptor_sets.len() as u32, descriptor_sets.as_ptr(), 0, std::ptr::null());
     }
 
@@ -270,6 +226,80 @@ impl CommandBuffer {
         };
 
         call!(self.fns.cmd_copy_buffer, self.handle, src_buffer.buffer, dst_buffer.buffer, 1, &copy_info);
+    }
+
+    pub fn copy_image_to_image(&self,
+        source:      VkImage, src_size: VkExtent2D,
+        destination: VkImage, dst_size: VkExtent2D)
+    {
+        assert!(self.state == CommandBufferState::Open);
+
+        let blit_region = VkImageBlit2{
+            sType:          VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+            pNext:          std::ptr::null(),
+            srcSubresource: VkImageSubresourceLayers{
+                aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
+                mipLevel:       0,
+                baseArrayLayer: 0,
+                layerCount:     1,
+            },
+            srcOffsets:     [
+                VkOffset3D::default(),
+                VkOffset3D{
+                    x: src_size.width  as i32,
+                    y: src_size.height as i32,
+                    z: 1,
+                },
+            ],
+            dstSubresource: VkImageSubresourceLayers{
+                aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
+                mipLevel:       0,
+                baseArrayLayer: 0,
+                layerCount:     1,
+            },
+            dstOffsets:     [
+                VkOffset3D::default(),
+                VkOffset3D{
+                    x: dst_size.width  as i32,
+                    y: dst_size.height as i32,
+                    z: 1,
+                },
+            ],
+        };
+
+        let blit_info = VkBlitImageInfo2{
+            sType:          VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+            pNext:          std::ptr::null(),
+            srcImage:       source,
+            srcImageLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dstImage:       destination,
+            dstImageLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            regionCount:    1,
+            pRegions:       &blit_region,
+            filter:         VK_FILTER_LINEAR,
+        };
+
+        call!(self.fns.cmd_blit_image2, self.handle, &blit_info);
+    }
+
+    pub fn copy_buffer_to_image(&self, upload_buffer: &AllocatedBuffer, dst_image: &AllocatedImage, size: VkExtent3D) {
+        assert!(self.state == CommandBufferState::Open);
+
+        let copy_region = VkBufferImageCopy{
+            bufferOffset:      0,
+            bufferRowLength:   0,
+            bufferImageHeight: 0,
+            imageSubresource:  VkImageSubresourceLayers{
+                aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
+                mipLevel:       0,
+                baseArrayLayer: 0,
+                layerCount:     1,
+            },
+            imageOffset:       VkOffset3D::default(),
+            imageExtent:       size,
+        };
+
+		call!(self.fns.cmd_copy_buffer_to_image, self.handle, upload_buffer.buffer, dst_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
     }
 
     pub fn bind_index_buffer(&self, index_buffer: &AllocatedBuffer) {
