@@ -309,4 +309,102 @@ impl CommandBuffer {
     pub fn draw_indexed(&self, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) {
         call!(self.fns.cmd_draw_indexed, self.handle, index_count, instance_count, first_index, vertex_offset, first_instance);
     }
+
+    pub fn generate_mipmaps(&self, image: &AllocatedImage) {
+        assert!(self.state == CommandBufferState::Open);
+
+        let mut image_size = VkExtent2D{ width: image.dims.width, height: image.dims.height };
+        let mip_count      = ((image_size.width.max(image_size.height) as f32).log2().floor() as i32) + 1;
+
+        for i in 0..mip_count {
+            let half_size = VkExtent2D{ width: image_size.width / 2, height: image_size.height / 2 };
+
+            let mut subresource_range = make_image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+            subresource_range.levelCount   = 1;
+            subresource_range.baseMipLevel = i as u32;
+
+            let image_barrier = VkImageMemoryBarrier2{
+                sType:               VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                pNext:               std::ptr::null(),
+                srcStageMask:        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                srcAccessMask:       VK_ACCESS_2_MEMORY_WRITE_BIT,
+                dstStageMask:        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                dstAccessMask:       VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT,
+                oldLayout:           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                newLayout:           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                srcQueueFamilyIndex: 0,
+                dstQueueFamilyIndex: 0,
+                image:               image.image,
+                subresourceRange:    subresource_range,
+            };
+
+            let dep_info = VkDependencyInfo{
+                sType:                    VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                pNext:                    std::ptr::null(),
+                dependencyFlags:          0,
+                memoryBarrierCount:       0,
+                pMemoryBarriers:          std::ptr::null(),
+                bufferMemoryBarrierCount: 0,
+                pBufferMemoryBarriers:    std::ptr::null(),
+                imageMemoryBarrierCount:  1,
+                pImageMemoryBarriers:     &image_barrier,
+            };
+
+            call!(self.fns.cmd_pipeline_barrier2, self.handle, &dep_info);
+
+            if i < mip_count - 1 {
+                let blit_region = VkImageBlit2{
+                    sType:          VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+                    pNext:          std::ptr::null(),
+                    srcSubresource: VkImageSubresourceLayers{
+                        aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
+                        mipLevel:       i as u32,
+                        baseArrayLayer: 0,
+                        layerCount:     1,
+                    },
+                    srcOffsets:     [
+                        VkOffset3D::default(),
+                        VkOffset3D{
+                            x: image_size.width  as i32,
+                            y: image_size.height as i32,
+                            z: 1,
+                        },
+                    ],
+                    dstSubresource: VkImageSubresourceLayers{
+                        aspectMask:     VK_IMAGE_ASPECT_COLOR_BIT,
+                        mipLevel:       (i + 1) as u32,
+                        baseArrayLayer: 0,
+                        layerCount:     1,
+                    },
+                    dstOffsets:     [
+                        VkOffset3D::default(),
+                        VkOffset3D{
+                            x: half_size.width  as i32,
+                            y: half_size.height as i32,
+                            z: 1,
+                        },
+                    ],
+                };
+
+                let blit_info = VkBlitImageInfo2{
+                    sType:          VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+                    pNext:          std::ptr::null(),
+                    srcImage:       image.image,
+                    srcImageLayout: VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    dstImage:       image.image,
+                    dstImageLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    regionCount:    1,
+                    pRegions:       &blit_region,
+                    filter:         VK_FILTER_LINEAR,
+                };
+
+                call!(self.fns.cmd_blit_image2, self.handle, &blit_info);
+
+                image_size = half_size;
+            }
+        }
+
+        // transition all mip levels into the final read_only layout
+        self.transition_image(image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
 }

@@ -660,21 +660,21 @@ impl RenderSystem {
             let packed_color = Float4::one().pack_unorm_u32();
             let packed_ptr = (&packed_color as *const u32) as *const u8;
 
-            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true)
         };
 
         let grey_image = {
             let packed_color = Float4::new(0.66, 0.66, 0.66, 1.0).pack_unorm_u32();
             let packed_ptr = (&packed_color as *const u32) as *const u8;
 
-            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true)
         };
 
         let black_image = {
             let packed_color = Float4::zero().pack_unorm_u32();
             let packed_ptr = (&packed_color as *const u32) as *const u8;
 
-            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+            result.upload_image(packed_ptr, VkExtent3D{ width: 1, height: 1, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true)
         };
 
         let checkerboard = {
@@ -688,7 +688,7 @@ impl RenderSystem {
           		}
             }
 
-            result.upload_image(pixels.as_ptr() as *const u8, VkExtent3D{ width: 16, height: 16, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false)
+            result.upload_image(pixels.as_ptr() as *const u8, VkExtent3D{ width: 16, height: 16, depth: 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true)
         };
 
         result.white_image = white_image;
@@ -1143,7 +1143,12 @@ impl RenderSystem {
             |command_buffer: &CommandBuffer| {
           		command_buffer.transition_image(result.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
                 command_buffer.copy_buffer_to_image(&upload_buffer, &result, size);
-                command_buffer.transition_image(result.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+                if mipmapped {
+                    command_buffer.generate_mipmaps(&result);
+                } else {
+                    command_buffer.transition_image(result.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                }
             }
         );
 

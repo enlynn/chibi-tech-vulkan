@@ -1374,8 +1374,6 @@ impl Device {
         memory_props:       VkMemoryPropertyFlagBits,
         mipmapped:          bool)    -> super::AllocatedImage
     {
-        assert!(!mipmapped, "Mipmapping is not implemented yet");
-
         let mut result = super::AllocatedImage::default();
 
         // select the aspect flags
@@ -1388,7 +1386,10 @@ impl Device {
         result.format = format;
         result.dims   = extent;
 
-        let image_ci = util::make_image_ci(format, image_usage, extent);
+        let mut image_ci = util::make_image_ci(format, image_usage, extent);
+        if mipmapped {
+            image_ci.mipLevels = ((extent.width.max(extent.height) as f32).log2().floor() as u32) + 1;
+        }
 
         //for the draw image, we want to allocate it from gpu local memory
         let mut image_alloc_info = VmaAllocationCreateInfo::default();
@@ -1399,7 +1400,8 @@ impl Device {
         call_throw!(vmaCreateImage, self.allocator, &image_ci, &image_alloc_info, &mut result.image, &mut result.memory, ptr::null_mut());
 
         //build an image-view for the draw image to use for rendering
-        let image_view_ci = util::make_image_view_ci(result.format, result.image, aspect_flag);
+        let mut image_view_ci = util::make_image_view_ci(result.format, result.image, aspect_flag);
+        image_view_ci.subresourceRange.levelCount = image_ci.mipLevels;
 
         call_throw!(self.fns.create_image_view, self.handle, &image_view_ci, ptr::null_mut(), &mut result.view);
 
