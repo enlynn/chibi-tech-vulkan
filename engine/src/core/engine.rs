@@ -1,9 +1,15 @@
 
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::ptr;
 
 use crate::window;
-use crate::renderer;
+use crate::renderer::{
+    command_buffer::*,
+    mesh::Vertex,
+    system::{RenderSystem, RendererCreateInfo},
+    thread::*,
+};
 
 use vendor::imgui::*;
 
@@ -26,7 +32,7 @@ pub struct Engine {
     game:          RefCell<Box<dyn Game>>,
     window_system: window::WindowSystem,
     client_window: window::Window,
-    render_system: RefCell<renderer::RenderSystem>,
+    render_thread: RenderThread,
 }
 
 impl Engine {
@@ -35,13 +41,12 @@ impl Engine {
         let window_system = window::WindowSystem::new();
         // todo: set window title/width/height based on user game data.
         let client_window = window_system.create_window("Chibi Vulkan", 1920, 1080);
-        let mut render_system = renderer::RenderSystem::new(renderer::RendererCreateInfo{
+        let render_thread = create_render_thread(RendererCreateInfo{
             surface: client_window.get_native_surface(),
         });
 
-
         let (width, height) = client_window.get_framebuffer_size();
-        render_system.on_resize(width, height);
+        render_thread.on_resize(width, height);
 
         let ig_ctx = unsafe { igCreateContext(std::ptr::null_mut()) };
 
@@ -49,7 +54,7 @@ impl Engine {
             game,
             window_system,
             client_window,
-            render_system: RefCell::new(render_system),
+            render_thread,
         }
     }
 
@@ -71,11 +76,10 @@ impl Engine {
 
         // let's upload some test geometry
         //
-        let mut upload_commands = renderer::RenderCommandBuffer::default();
+        let mut upload_commands = RenderCommandBuffer::default();
 
         {
             use crate::math::{float3::*, float4::*};
-            use renderer::{Vertex, RenderCommand, CreateMeshInfo};
 
             let mut vertices: [Vertex; 4] = [Vertex::default(); 4];
 
@@ -98,7 +102,6 @@ impl Engine {
             vertices[3].uv_x = 0.0;
             vertices[3].uv_y = 1.0;
 
-
             let indices: [u32; 6] = [
                 0, 1, 2, 2, 1, 3,
             ];
@@ -114,12 +117,7 @@ impl Engine {
             upload_commands.add_command(RenderCommand::CreateMesh(mesh_info));
         }
 
-        self.render_system.borrow_mut().submit_render_commands(upload_commands);
-
-        // let's read back the command list
-        //   note: this will eventually be deferred.
-        //
-        // todo:
+        self.render_thread.submit_command_buffer(upload_commands);
 
         //use std::time::{Duration, Instant};
         //let mut current_time = Instant::now();
@@ -137,13 +135,24 @@ impl Engine {
                 break;
             }
 
+            // Process any waiting messages from the renderer
+            //
+            let mut last_frame_rendered = false;
+            while let Some(msg) = self.render_thread.recieve_message(false) {
+                match msg {
+                    RenderThreadResponse::RenderFrameDone   => last_frame_rendered = true,
+                    RenderThreadResponse::RendererShutdown  => todo!(),
+                    RenderThreadResponse::SubmitCommandList => todo!(),
+                }
+            }
+
             game_res = game.on_update();
             if !game_res {
                 break;
             }
 
             // this should be the "editor_begin_frame()"
-            if true {
+            if false {
                 use vendor::imgui::*;
                 use crate::util::ffi::*;
 
@@ -154,7 +163,7 @@ impl Engine {
                 let mut is_open = true;
                 call!(igShowDemoWindow, &mut is_open);
 
-                self.render_system.borrow_mut().on_editor_update();
+                //self.render_system.borrow_mut().on_editor_update();
 
                 call!(igEndFrame);
             }
@@ -168,33 +177,36 @@ impl Engine {
                 break;
             }
 
-            let empty_cmd_buffer = renderer::RenderCommandBuffer::default();
-            self.render_system.borrow_mut().render(empty_cmd_buffer);
+            self.render_thread.render_frame(frame_index);
 
             // this should be the "editor_render_external_windows()" - render imgui viewports
-            unsafe {
-                let io = { &mut *vendor::imgui::igGetIO() }; // gets a mutable reference
-                if (io.ConfigFlags & vendor::imgui::ImGuiConfigFlags_ViewportsEnable as i32) != 0
-                {
-                    vendor::imgui::igUpdatePlatformWindows();
-                    vendor::imgui::igRenderPlatformWindowsDefault(ptr::null_mut(), ptr::null_mut());
-                }
-            }
+            // unsafe {
+            //     let io = { &mut *vendor::imgui::igGetIO() }; // gets a mutable reference
+            //     if (io.ConfigFlags & vendor::imgui::ImGuiConfigFlags_ViewportsEnable as i32) != 0
+            //     {
+            //         vendor::imgui::igUpdatePlatformWindows();
+            //         vendor::imgui::igRenderPlatformWindowsDefault(ptr::null_mut(), ptr::null_mut());
+            //     }
+            // }
 
-            //elapsed_time = Instant::now();
+            //elapsed_time = Instant
             //println!("\tFinished rendering. {}", (elapsed_time - current_time).as_millis_f64());
             //current_time = elapsed_time;
 
             frame_index += 1;
         }
+
+        self.render_thread.destroy();
     }
 }
 
 impl Drop for Engine {
     fn drop(&mut self) {
+        println!("Shutting down the engine.");
+
         let mut game = self.game.borrow_mut();
         game.on_shutdown();
 
-        self.render_system.borrow_mut().destroy();
+
     }
 }
