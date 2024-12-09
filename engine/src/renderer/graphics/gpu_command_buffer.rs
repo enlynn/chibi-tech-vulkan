@@ -184,7 +184,7 @@ impl CommandBuffer {
         call!(self.fns.cmd_end_rendering, self.handle);
     }
 
-    pub fn set_viewport(&self, width: u32, height: u32, offset_x: u32, offset_y: u32) {
+    pub fn set_viewport(&self, width: i32, height: i32, offset_x: u32, offset_y: u32) {
         assert!(self.state == CommandBufferState::Open);
 
         let viewport = VkViewport{

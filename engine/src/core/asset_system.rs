@@ -102,17 +102,31 @@ pub struct Asset {
 
 //
 pub struct AssetSystem {
+    rsrc_dir: PathBuf,
+    user_dir: PathBuf,
+    priv_dir: PathBuf,
+
     // Virtual File System
-    resource_drive: Rc<FileDrive>,
-    user_drive:     Rc<FileDrive>,
-    priv_drive:     Rc<FileDrive>,
-
-
+    //resource_drive: Rc<FileDrive>,
+    //user_drive:     Rc<FileDrive>,
+    //priv_drive:     Rc<FileDrive>,
 }
 
 impl AssetSystem {
-    pub fn new() {
+    pub fn new(game_rsrc: PathBuf) -> Self {
+        Self{
+            rsrc_dir: game_rsrc.join("assets"),
+            user_dir: PathBuf::new(), //todo
+            priv_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets"),
+        }
+    }
 
+    pub fn get_dir(&self, drive: AssetDrive) -> PathBuf {
+        match drive {
+            AssetDrive::Res  => self.rsrc_dir.clone(),
+            AssetDrive::Usr  => self.user_dir.clone(),
+            AssetDrive::Priv => self.priv_dir.clone(),
+        }
     }
 
     pub fn get_root_dir(drive: AssetDrive) -> PathBuf {

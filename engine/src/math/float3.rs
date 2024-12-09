@@ -2,7 +2,7 @@ use std::ops;
 
 use crate::math::{Float, float_is_zero, rand_float, rand_float_in_range};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Float3 {
     pub x: Float,
     pub y: Float,

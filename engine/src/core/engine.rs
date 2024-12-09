@@ -1,6 +1,7 @@
 
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::ptr;
 
 use crate::window;
@@ -13,6 +14,8 @@ use crate::renderer::{
 
 use vendor::imgui::*;
 
+use super::asset_system::*;
+
 pub trait Game {
     fn on_init(&mut self)     -> bool;
     fn on_update(&mut self)   -> bool;
@@ -20,9 +23,17 @@ pub trait Game {
     fn on_shutdown(&mut self) -> bool;
 }
 
+pub struct GameInfo {
+    pub title:         String,
+    pub game_version:  u32,
+    pub window_width:  u32,
+    pub window_height: u32,
+    pub manifest_dir:  std::path::PathBuf,
+}
+
 pub struct DefaultGame {}
 impl Game for DefaultGame {
-    fn on_init(&mut self)     -> bool { return false; }
+    fn on_init(&mut self) -> bool { return false; }
     fn on_update(&mut self)   -> bool { return false; }
     fn on_render(&mut self)   -> bool { return false; }
     fn on_shutdown(&mut self) -> bool { return false; }
@@ -31,16 +42,22 @@ impl Game for DefaultGame {
 pub struct Engine {
     game:          RefCell<Box<dyn Game>>,
     window_system: window::WindowSystem,
-    client_window: window::Window,
+    client_window: RefCell<window::Window>,
     render_thread: RenderThread,
+    asset_system:  AssetSystem,
 }
 
 impl Engine {
-    pub fn new() -> Engine {
-        let game = RefCell::new(Box::new(DefaultGame{}));
+    pub fn new(game_info: GameInfo) -> Engine {
+        let game = Box::new(DefaultGame{});
+
         let window_system = window::WindowSystem::new();
-        // todo: set window title/width/height based on user game data.
-        let client_window = window_system.create_window("Chibi Vulkan", 1920, 1080);
+        let client_window = window_system.create_window(
+            game_info.title.as_str(),
+            game_info.window_width  as i32,
+            game_info.window_height as i32,
+        );
+
         let render_thread = create_render_thread(RendererCreateInfo{
             surface: client_window.get_native_surface(),
         });
@@ -51,10 +68,11 @@ impl Engine {
         let ig_ctx = unsafe { igCreateContext(std::ptr::null_mut()) };
 
         return Engine{
-            game,
+            game: RefCell::new(game),
             window_system,
-            client_window,
+            client_window: RefCell::new(client_window),
             render_thread,
+            asset_system: AssetSystem::new(game_info.manifest_dir),
         }
     }
 
@@ -74,51 +92,6 @@ impl Engine {
             return;
         }
 
-        // let's upload some test geometry
-        //
-        let mut upload_commands = RenderCommandBuffer::default();
-
-        {
-            use crate::math::{float3::*, float4::*};
-
-            let mut vertices: [Vertex; 4] = [Vertex::default(); 4];
-
-            vertices[0].position = Float3{ x:  0.5, y: -0.5, z: 0.0 };
-            vertices[1].position = Float3{ x:  0.5, y:  0.5, z: 0.0 };
-            vertices[2].position = Float3{ x: -0.5, y: -0.5, z: 0.0 };
-            vertices[3].position = Float3{ x: -0.5, y:  0.5, z: 0.0 };
-
-            vertices[0].color = Float4{ x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
-            vertices[1].color = Float4{ x: 0.5, y: 0.5, z: 0.5, w: 1.0 };
-            vertices[2].color = Float4{ x: 1.0, y: 0.0, z: 0.0, w: 1.0 };
-            vertices[3].color = Float4{ x: 0.0, y: 1.0, z: 0.0, w: 1.0 };
-
-            vertices[0].uv_x = 1.0;
-            vertices[0].uv_y = 1.0;
-            vertices[1].uv_x = 1.0;
-            vertices[1].uv_y = 0.0;
-            vertices[2].uv_x = 0.0;
-            vertices[2].uv_y = 0.0;
-            vertices[3].uv_x = 0.0;
-            vertices[3].uv_y = 1.0;
-
-            let indices: [u32; 6] = [
-                0, 1, 2, 2, 1, 3,
-            ];
-
-            let mesh_info = CreateMeshInfo{
-                vertices:     vertices.as_ptr(),
-                vertex_count: vertices.len(),
-                indices:      indices.as_ptr(),
-                index_count:  indices.len(),
-                engine_id:    0,
-            };
-
-            upload_commands.add_command(RenderCommand::CreateMesh(mesh_info));
-        }
-
-        self.render_thread.submit_command_buffer(upload_commands);
-
         //use std::time::{Duration, Instant};
         //let mut current_time = Instant::now();
 
@@ -131,7 +104,7 @@ impl Engine {
             //println!("\tFinished polling input. {}", (elapsed_time - current_time).as_millis_f64());
             //current_time = elapsed_time;
 
-            if self.client_window.should_window_close() {
+            if self.client_window.borrow().should_window_close() {
                 break;
             }
 
@@ -198,6 +171,18 @@ impl Engine {
 
         self.render_thread.destroy();
     }
+
+    pub fn get_asset_dir(&self, drive: AssetDrive) -> PathBuf {
+        return self.asset_system.get_dir(drive);
+    }
+
+    pub fn submit_render_command_buffer(&self, cmd: RenderCommandBuffer) {
+        self.render_thread.submit_command_buffer(cmd);
+    }
+
+    pub fn register_window_event(&self, ev_type: window::WindowEventType, listener: window::EventListener) {
+        self.client_window.borrow_mut().register_event(ev_type, listener);
+    }
 }
 
 impl Drop for Engine {
@@ -206,7 +191,5 @@ impl Drop for Engine {
 
         let mut game = self.game.borrow_mut();
         game.on_shutdown();
-
-
     }
 }

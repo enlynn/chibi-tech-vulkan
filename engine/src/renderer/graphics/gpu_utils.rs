@@ -681,7 +681,7 @@ pub fn make_depth_attachment_info(view: VkImageView, layout: VkImageLayout) -> V
     attachment_info.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
     attachment_info.clearValue  = VkClearValue{
         depthStencil: VkClearDepthStencilValue{
-            depth:   0.0,
+            depth:   1.0,
             stencil: 0,
         },
     };

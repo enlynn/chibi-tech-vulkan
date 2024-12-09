@@ -109,6 +109,10 @@ pub struct RenderSystem{
 	default_sampler_linear:   VkSampler,
 	default_sampler_nearest:  VkSampler,
 
+	// Camera data
+	view_matrix:        Float4x4,
+	perspective_matrix: Float4x4,
+
 	// Outgoing Commands to the engine
 	//   Will probably want this as a mpsc::Sender once the Renderer gets put on its own thread.
 	outgoing_commands: RenderCommandBuffer,
@@ -372,7 +376,7 @@ impl RenderSystem {
             //filled triangles
                 .set_polygon_mode(VK_POLYGON_MODE_FILL)
             //no backface culling
-                .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+                .set_cull_mode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
             //no multisampling
                 .set_multisampling_none()
             //no blending
@@ -384,7 +388,7 @@ impl RenderSystem {
             //no depth testing
                 //.disable_depth_test()
             // enabled depth testing
-                .enable_depth_test(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
+                .enable_depth_test(true, VK_COMPARE_OP_LESS_OR_EQUAL)
             //connect the image format we will draw into, from draw image
                 .set_color_attachment_format(scene_image.format)
                 .set_depth_format(depth_image.format);
@@ -437,6 +441,8 @@ impl RenderSystem {
             error_checkerboard_image: AllocatedImage::default(),
             default_sampler_linear:   linear_sampler,
             default_sampler_nearest:  nearest_sampler,
+            view_matrix:              Float4x4::identity(),
+            perspective_matrix:       Float4x4::identity(),
             outgoing_commands:        RenderCommandBuffer::default(),
         };
 
@@ -524,7 +530,7 @@ impl RenderSystem {
         cmd_buffer.begin_rendering(render_info);
 
         cmd_buffer.bind_graphics_pipeline(self.triangle_p);
-        cmd_buffer.set_viewport(draw_extent.width, draw_extent.height, 0, 0);
+        cmd_buffer.set_viewport(draw_extent.width as i32, (draw_extent.height  as i32), 0, 0);
         cmd_buffer.set_scissor(draw_extent.width, draw_extent.height);
 
         // let's bind a texture!
@@ -542,11 +548,13 @@ impl RenderSystem {
             cmd_buffer.bind_graphics_descriptor_sets(self.triangle_pl, 0, &sets);
         }
 
+        let persp_view = mul_rh(self.perspective_matrix, self.view_matrix);
+
         for i in 0..self.mesh_count {
             let mesh = &self.meshes[i];
 
             let push_consts = GpuDrawPushConstants {
-                world_matrix: Float4x4::identity(),
+                world_matrix:  mul_rh(persp_view, mesh.transform),
                 vertex_buffer: mesh.vertex_buffer_address,
             };
 
@@ -626,6 +634,11 @@ impl RenderSystem {
     fn process_render_commands(&mut self, command_buffer: &RenderCommandBuffer) {
         for command in &command_buffer.commands {
             match command {
+                RenderCommand::UpdateCamera(camera) => {
+                    self.view_matrix        = camera.view_matrix;
+                    self.perspective_matrix = camera.perspective_matrix;
+                }
+
                 RenderCommand::CreateMesh(mesh_info) => {
                     assert!(self.mesh_count < MAX_LOADED_MESHES - 1);
 
@@ -633,7 +646,8 @@ impl RenderSystem {
                     let indices  = unsafe { std::slice::from_raw_parts(mesh_info.indices,  mesh_info.index_count)  };
 
                     //note: this will evventually be deferred.
-                    let mesh = self.upload_mesh(indices, vertices);
+                    let mut mesh = self.upload_mesh(indices, vertices);
+                    mesh.transform = mesh_info.transform;
 
                     let mesh_id = self.mesh_count;
 

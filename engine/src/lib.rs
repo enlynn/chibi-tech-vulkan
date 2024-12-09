@@ -7,11 +7,10 @@
 
 extern crate vendor;
 
-mod window;
-mod renderer;
-mod math;
-
 pub mod core;
+pub mod math;
+pub mod renderer;
+pub mod window;
 
 mod util;
 
@@ -57,8 +56,8 @@ pub const ENGINE_VERSION_MINOR: u32 = 0;
 pub const ENGINE_VERSION_PATCH: u32 = 1;
 pub const ENGINE_VERSION: u32 = ENGINE_VERSION_MAJOR << 24 | ENGINE_VERSION_MINOR << 16 | ENGINE_VERSION_PATCH << 8;
 
-pub fn new_engine() -> Rc<core::engine::Engine>{
-    return Rc::new(core::engine::Engine::new());
+pub fn new_engine(game_info: core::engine::GameInfo) -> Rc<core::engine::Engine>{
+    return Rc::new(core::engine::Engine::new(game_info));
 }
 
 pub fn make_app_version(major: u32, minor: u32, patch: u32) -> u32 {
