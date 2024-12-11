@@ -4,6 +4,7 @@
 #![feature(concat_idents)]
 #![feature(stmt_expr_attributes)]
 #![feature(duration_millis_float)]
+#![feature(vec_push_within_capacity)]
 
 extern crate vendor;
 
