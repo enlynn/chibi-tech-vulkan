@@ -7,9 +7,10 @@
 #![feature(vec_push_within_capacity)]
 
 extern crate vendor;
+extern crate assetlib;
+extern crate common;
 
 pub mod core;
-pub mod math;
 pub mod renderer;
 pub mod window;
 

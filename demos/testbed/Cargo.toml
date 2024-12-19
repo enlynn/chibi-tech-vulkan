@@ -6,6 +6,8 @@ resolver="2"
 
 [dependencies]
 chibi_engine = { path="../../engine" }
+common       = { path="../../common" }
+assetlib     = { path="../../assetlib", features = ["importer"] } #temp.
 
 [[bin]]
 name = "testbed"

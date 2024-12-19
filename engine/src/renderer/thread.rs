@@ -106,6 +106,7 @@ fn process_render_command(render_system: &mut RenderSystem, command: RenderThrea
 // so this is a little silly, but c_void pointers don't implement Send! Ok, it makes sense,
 // but it is not a real concern for this, so I am going to, uh, sneak this in there.
 unsafe impl Send for RendererCreateInfo {}
+unsafe impl Send for RenderCommand {}
 
 pub fn create_render_thread(create_info: RendererCreateInfo) -> RenderThread {
     let (main_thread_sender,   main_thread_reciever)   = mpsc::channel();

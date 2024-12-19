@@ -5,4 +5,7 @@ pub mod thread;
 
 mod graphics;
 mod shader;
-mod material_system;
+mod texture;
+mod material;
+mod util;
+mod buffer;

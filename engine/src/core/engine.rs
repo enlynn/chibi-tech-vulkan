@@ -4,21 +4,20 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::ptr;
 
+use assetlib::mesh::Vertex;
+
 use crate::window;
 use crate::renderer::{
     command_buffer::*,
-    mesh::Vertex,
     system::{RenderSystem, RendererCreateInfo},
     thread::*,
 };
-
-use vendor::imgui::*;
 
 use super::asset_system::*;
 
 pub trait Game {
     fn on_init(&mut self)     -> bool;
-    fn on_update(&mut self)   -> bool;
+    fn on_update(&mut self, frame_time_ms: f64)   -> bool;
     fn on_render(&mut self)   -> bool; //Will this function be necessary?
     fn on_shutdown(&mut self) -> bool;
 }
@@ -34,7 +33,7 @@ pub struct GameInfo {
 pub struct DefaultGame {}
 impl Game for DefaultGame {
     fn on_init(&mut self) -> bool { return false; }
-    fn on_update(&mut self)   -> bool { return false; }
+    fn on_update(&mut self, frame_time: f64)   -> bool { return false; }
     fn on_render(&mut self)   -> bool { return false; }
     fn on_shutdown(&mut self) -> bool { return false; }
 }
@@ -65,8 +64,6 @@ impl Engine {
         let (width, height) = client_window.get_framebuffer_size();
         render_thread.on_resize(width, height);
 
-        let ig_ctx = unsafe { igCreateContext(std::ptr::null_mut()) };
-
         return Engine{
             game: RefCell::new(game),
             window_system,
@@ -92,17 +89,18 @@ impl Engine {
             return;
         }
 
-        //use std::time::{Duration, Instant};
-        //let mut current_time = Instant::now();
+        let refresh_rate = 1.0 / 60.0; //todo: choose based on monitor/settings
+
+        use std::time::{Duration, Instant};
+        let mut frame_timer = Instant::now();
+        let mut last_frame_time_ms = 0.0f64;
 
         loop {
+            frame_timer = Instant::now();
+
             if !self.window_system.pump_window_message() {
                 break;
             }
-
-            //let mut elapsed_time = Instant::now();
-            //println!("\tFinished polling input. {}", (elapsed_time - current_time).as_millis_f64());
-            //current_time = elapsed_time;
 
             if self.client_window.borrow().should_window_close() {
                 break;
@@ -119,31 +117,10 @@ impl Engine {
                 }
             }
 
-            game_res = game.on_update();
+            game_res = game.on_update(last_frame_time_ms);
             if !game_res {
                 break;
             }
-
-            // this should be the "editor_begin_frame()"
-            if false {
-                use vendor::imgui::*;
-                use crate::util::ffi::*;
-
-                ig_vulkan_new_frame();
-                ig_glfw_new_frame();
-                call!(igNewFrame);
-
-                let mut is_open = true;
-                call!(igShowDemoWindow, &mut is_open);
-
-                //self.render_system.borrow_mut().on_editor_update();
-
-                call!(igEndFrame);
-            }
-
-            //elapsed_time = Instant::now();
-            //println!("\tFinished updating imgui. {}", (elapsed_time - current_time).as_millis_f64());
-            //current_time = elapsed_time;
 
             game_res = game.on_render();
             if !game_res {
@@ -152,19 +129,16 @@ impl Engine {
 
             self.render_thread.render_frame(frame_index);
 
-            // this should be the "editor_render_external_windows()" - render imgui viewports
-            // unsafe {
-            //     let io = { &mut *vendor::imgui::igGetIO() }; // gets a mutable reference
-            //     if (io.ConfigFlags & vendor::imgui::ImGuiConfigFlags_ViewportsEnable as i32) != 0
-            //     {
-            //         vendor::imgui::igUpdatePlatformWindows();
-            //         vendor::imgui::igRenderPlatformWindowsDefault(ptr::null_mut(), ptr::null_mut());
-            //     }
-            // }
+            let elapsed_time = Instant::now();
+            let sec_elapsed = (elapsed_time - frame_timer).as_secs_f64();
+            if (sec_elapsed < refresh_rate)
+            {
+                let sleep_ms = (1000.0 * (refresh_rate - sec_elapsed)) as u64;
+                std::thread::sleep(Duration::from_millis(sleep_ms));
+            }
 
-            //elapsed_time = Instant
-            //println!("\tFinished rendering. {}", (elapsed_time - current_time).as_millis_f64());
-            //current_time = elapsed_time;
+            last_frame_time_ms = (Instant::now() - frame_timer).as_millis_f64();
+            //println!("\tFinished rendering. {}", last_frame_time_ms);
 
             frame_index += 1;
         }

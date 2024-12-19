@@ -137,7 +137,7 @@ impl AssetSystem {
                 let mut root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 root_dir = root_dir.join("assets");
 
-                println!("Root Asset Directory: {:?}", root_dir);
+                //println!("Root Asset Directory: {:?}", root_dir);
 
                 return root_dir;
             },

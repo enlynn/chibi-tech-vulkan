@@ -318,18 +318,27 @@ pub struct DeviceFnTable
 /* Vulkan Helper get_gpu_featuresFunctions                                  */
 
 pub fn load_vulkan_proc_addr() -> Result<GlobalFnTable, String> {
-    let lib: os::DllLibrary = if cfg!(unix) {
-        let mut lib = os::DllLibrary::load("libvulkan.so\0");
+    #[cfg(target_os = "linux")]
+    let vk_name          = "libvulkan.so\0";
+    #[cfg(target_os = "linux")]
+    let vk_name_fallback = "libvulkan.so.1\0";
+
+    #[cfg(target_os = "windows")]
+    let vk_name          = "vulkan.dll\0";
+    #[cfg(target_os = "windows")]
+    let vk_name_fallback = "vulkan-1.dll\0";
+
+    let lib: os::DllLibrary = {
+        let mut lib = os::DllLibrary::load(vk_name);
         if lib.is_none() {
-            lib = os::DllLibrary::load("libvulkan.so.1\0");
+            lib = os::DllLibrary::load(vk_name_fallback);
         }
+
         if let Some(valid_lib) = lib {
             valid_lib
         } else {
             return Err("Vulkan not found".to_string());
         }
-    } else {
-        return Err("Unsupported operating system".to_string());
     };
 
     let get_inst_procaddr: FN_vkGetInstanceProcAddr = unsafe { lib.get_fn("vkGetInstanceProcAddr\0").unwrap() };

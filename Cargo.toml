@@ -4,4 +4,6 @@ members = [
     "demos/testbed",
     "vendor",
     "engine",
+    "common",
+    "assetlib",
 ]

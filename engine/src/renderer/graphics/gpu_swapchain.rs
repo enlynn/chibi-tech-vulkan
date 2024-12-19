@@ -80,6 +80,10 @@ impl Swapchain {
         }
     }
 
+    pub fn get_swapchain_frame_index(&self) -> usize {
+        return self.frame_index;
+    }
+
     pub fn get_swapchain_image(&self) -> VkImage {
         self.images[self.swapchain_index as usize]
     }

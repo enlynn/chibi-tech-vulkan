@@ -4,11 +4,9 @@ use std::ffi::c_void;
 use std::ptr;
 use std::{ffi::CString, os::raw};
 
-use crate::window::WaylandSurface;
 use crate::util::ffi::call;
 
 use vendor::glfw::*;
-use vendor::imgui::*;
 
 use super::KeyModMask;
 
@@ -31,29 +29,6 @@ impl WindowSystem {
             glfwInit();
             // Vulkan requires us to set NO_API
             glfwWindowHint(GLFW_CLIENT_API as i32, GLFW_NO_API as i32);
-
-            // imgui setup
-            igCreateContext(ptr::null_mut());
-
-            let io = { &mut *igGetIO() }; // gets a mutable reference
-            io.MouseDrawCursor = true; // enable software cursor. get a lot of rendering lag without it.
-            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard as i32;   // Enable Keyboard Controls
-            //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad  as i32;   // Enable Gamepad Controls
-            //todo: figure out
-            //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable as i32;       // Enable Docking
-            //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable as i32;     // Enable Multi-Viewport / Platform Windows
-
-            //note: i have a style somewhere in an old project.
-            igStyleColorsDark(ptr::null_mut());
-
-            // When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
-            let style = { &mut *igGetStyle() };
-            if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable as i32) != 0
-            {
-                style.WindowRounding = 0.0;
-                style.Colors[ImGuiCol_WindowBg as usize].w = 1.0;
-            }
-
         };
         return WindowSystem {};
     }
@@ -122,6 +97,12 @@ extern "C" {
 
     // Win32 Bindings
     //
+
+    // HMODULE GetModuleHandleA([in, optional] LPCSTR lpModuleName);
+    pub fn GetModuleHandleA(lpModuleName: *mut raw::c_void) -> *mut raw::c_void;
+
+    //HWND 	glfwGetWin32Window(GLFWwindow *window)
+    pub fn glfwGetWin32Window(window: *mut GLFWwindow) -> *mut raw::c_void;
 }
 
 enum SupportedPlatform {
@@ -208,7 +189,8 @@ unsafe extern "C" fn glfw_mouse_scroll_callback(window: *mut GLFWwindow, xoffset
 
 impl Window {
     pub fn new(window: *mut GLFWwindow) -> Box<Window> {
-        let platform = if cfg!(unix) {
+        let platform = {
+            #[cfg(target_os = "linux")]
             if let Ok(session_type) = std::env::var("XDG_SESSION_TYPE") {
                 match session_type.as_str() {
                     "x11"     => { println!("Platform is xlib.");    SupportedPlatform::Xlib    },
@@ -218,15 +200,15 @@ impl Window {
             } else {
                 panic!("Unsupported window manager");
             }
-        } else if cfg!(windows) {
-            SupportedPlatform::Win32
-        } else {
-            panic!("Unsupported platform!");
-            //SupportedPlatform::Unknown
-        };
 
-        // Disabling imgui for now...
-        //ig_glfw_init(window, true);
+            #[cfg(target_os = "windows")]
+            if cfg!(windows) {
+                SupportedPlatform::Win32
+            } else {
+                panic!("Unsupported platform!");
+                //SupportedPlatform::Unknown
+            }
+        };
 
         let mut result = Box::new(Window {
             handle: window,
@@ -259,11 +241,13 @@ impl Window {
     }
 
     pub fn get_native_surface(&self) -> super::NativeSurface {
-        use super::X11Surface;
-
-        let native_surface = match self.platform {
+        let native_surface = match &self.platform {
             SupportedPlatform::Unknown => { panic!("Unsupported platform!"); },
+
+            #[cfg(target_os = "linux")]
             SupportedPlatform::Xlib    => {
+                use super::X11Surface;
+
                 let display = unsafe { glfwGetX11Display() };
                 let surface = unsafe { glfwGetX11Window(self.handle) };
 
@@ -272,13 +256,24 @@ impl Window {
                     display,
                 })
             },
+
+            #[cfg(target_os = "linux")]
             SupportedPlatform::Wayland => {
                 super::NativeSurface::Wayland(WaylandSurface{
                     surface: unsafe { glfwGetWaylandWindow(self.handle) },
                     display: unsafe { glfwGetWaylandDisplay()           },
                 })
             },
-            SupportedPlatform::Win32   => todo!(),
+
+            #[cfg(target_os = "windows")]
+            SupportedPlatform::Win32   => {
+                super::NativeSurface::Win32(super::Win32Surface {
+                    surface: unsafe { glfwGetWin32Window(self.handle)   },
+                    module:  unsafe { GetModuleHandleA(ptr::null_mut()) },
+                })
+            },
+
+            default => panic!("Unsupported platform."),
         };
 
         return native_surface;

@@ -1,0 +1,16 @@
+[package]
+name     = "assetlib"
+version  = "0.0.1"
+edition  = "2021"
+resolver = "2"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+common  = { path="../common" }
+meshopt = { version = "0.4.0",  optional = true }
+image   = { version = "0.25.5", optional = true }
+
+[features]
+importer = ["dep:meshopt", "dep:image"]

@@ -18,6 +18,7 @@ pub type Semaphore         = api::VkSemaphore;
 pub type TimelineSemaphore = api::VkSemaphore;
 pub type Fence             = api::VkFence;
 
+#[derive(Clone, Copy)]
 pub struct AllocatedImage {
     pub image:  api::VkImage,
     pub view:   api::VkImageView,

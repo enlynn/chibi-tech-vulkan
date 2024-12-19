@@ -2,15 +2,25 @@
 name = "chibi_engine"
 version = "0.1.0"
 edition = "2021"
-resolver="2"
+resolver = "2"
 
 [dependencies]
-rand = { version = "0.8.5" }
+common   = { path="../common" }
+assetlib = { path="../assetlib", features = ["importer"] }
 
 [dependencies.vendor]
-path="../vendor"
+path = "../vendor"
 # Uncomment to generate vendor bindings. Will increase build times.
 # features = ["generator"]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59.0", features = [
+        "Win32_Foundation",
+        "Win32_Security",
+        "Win32_System_Threading",
+        "Win32_UI_WindowsAndMessaging",
+        "Win32_System_LibraryLoader",
+    ]}
 
 [lib]
 path = "src/lib.rs"

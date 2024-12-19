@@ -13,14 +13,14 @@ pub struct WindowSystem {
 
 impl WindowSystem {
     pub fn new() -> WindowSystem {
-        return WindowSystem{
+        return WindowSystem {
             inner: imp::WindowSystem::new(),
         };
     }
 
     pub fn create_window(&self, title: &str, width: i32, height: i32) -> Window {
         return Window {
-            inner: self.inner.create_window(title, width, height)
+            inner: self.inner.create_window(title, width, height),
         };
     }
 
@@ -34,13 +34,13 @@ impl WindowSystem {
 //
 
 pub type KeyModMask = u16;
-pub const KEY_MOD_FLAG_NONE:      u16 = 0x000;
-pub const KEY_MOD_FLAG_SHIFT:     u16 = 0x001;
-pub const KEY_MOD_FLAG_CONTROL:   u16 = 0x002;
-pub const KEY_MOD_FLAG_ALT:       u16 = 0x004;
-pub const KEY_MOD_FLAG_SUPER:     u16 = 0x008;
+pub const KEY_MOD_FLAG_NONE: u16 = 0x000;
+pub const KEY_MOD_FLAG_SHIFT: u16 = 0x001;
+pub const KEY_MOD_FLAG_CONTROL: u16 = 0x002;
+pub const KEY_MOD_FLAG_ALT: u16 = 0x004;
+pub const KEY_MOD_FLAG_SUPER: u16 = 0x008;
 pub const KEY_MOD_FLAG_CAPS_LOCK: u16 = 0x010;
-pub const KEY_MOD_FLAG_NUM_LOCK:  u16 = 0x020;
+pub const KEY_MOD_FLAG_NUM_LOCK: u16 = 0x020;
 
 #[derive(PartialOrd, PartialEq)]
 pub enum KeyMod {
@@ -57,7 +57,7 @@ pub enum KeyMod {
 pub fn is_key_mod_flag_set(mask: KeyModMask, modifier: KeyMod) -> bool {
     assert!(modifier < KeyMod::Count);
 
-    let flag_list: [KeyModMask; KeyMod::Count as usize] =  [
+    let flag_list: [KeyModMask; KeyMod::Count as usize] = [
         KEY_MOD_FLAG_NONE,
         KEY_MOD_FLAG_SHIFT,
         KEY_MOD_FLAG_CONTROL,
@@ -74,11 +74,11 @@ pub fn is_key_mod_flag_set(mask: KeyModMask, modifier: KeyMod) -> bool {
 pub enum KeyboardKey {
     Unknown,
     Space,
-    Apostrophe,   // '
-    Comma,        // ,
-    Minus,        // -
-    Period,       // .
-    Slash,        // /
+    Apostrophe, // '
+    Comma,      // ,
+    Minus,      // -
+    Period,     // .
+    Slash,      // /
     Zero,
     One,
     Two,
@@ -89,8 +89,8 @@ pub enum KeyboardKey {
     Seven,
     Eight,
     Nine,
-    Semicolon,   // ;
-    Equal,       // =
+    Semicolon, // ;
+    Equal,     // =
     A,
     B,
     C,
@@ -117,12 +117,12 @@ pub enum KeyboardKey {
     X,
     Y,
     Z,
-    LeftBracket,    // [
-    Backslash,       // \
-    RightBracket,   // ]
-    GraveAccent,    // `
-    World1,         // non-US #1
-    World2,         // non-US #2
+    LeftBracket,  // [
+    Backslash,    // \
+    RightBracket, // ]
+    GraveAccent,  // `
+    World1,       // non-US #1
+    World2,       // non-US #2
     Escape,
     Enter,
     Tab,
@@ -198,15 +198,15 @@ pub enum KeyboardKey {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum MouseButton {
-    Unknown      = 0,
-    ButtonLeft   = 1,
-    ButtonRight  = 2,
+    Unknown = 0,
+    ButtonLeft = 1,
+    ButtonRight = 2,
     ButtonMiddle = 3,
-    Button4      = 4,
-    Button5      = 5,
-    Button6      = 6,
-    Button7      = 7,
-    Button8      = 8,
+    Button4 = 4,
+    Button5 = 5,
+    Button6 = 6,
+    Button7 = 7,
+    Button8 = 8,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -219,16 +219,16 @@ pub enum KeyState {
 
 #[derive(Debug, Copy, Clone)]
 pub struct KeyEvent {
-    pub key:   KeyboardKey,
+    pub key: KeyboardKey,
     pub state: KeyState,
-    pub mods:  KeyModMask,
+    pub mods: KeyModMask,
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct MouseEvent {
     pub button: MouseButton,
-    pub state:  KeyState,
-    pub mods:   KeyModMask,
+    pub state: KeyState,
+    pub mods: KeyModMask,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -239,7 +239,7 @@ pub struct MouseMoveEvent {
 
 #[derive(Debug, Copy, Clone)]
 pub struct WindowResizeEvent {
-    pub width:  u32,
+    pub width: u32,
     pub height: u32,
 }
 
@@ -256,10 +256,10 @@ pub enum WindowEvent {
 pub enum WindowEventType {
     OnKeyboardKey = 0, // Register for key press, release, and held events
     OnMouseButton = 1, // Register for mouse button press, release, and held events
-    OnMouseMove   = 2, // Register for mouse move events
+    OnMouseMove = 2,   // Register for mouse move events
     OnMouseScroll = 3, // Register for mouse scroll events
-    OnResize      = 4, // Register for window resize events
-    Count         = 5,
+    OnResize = 4,      // Register for window resize events
+    Count = 5,
 }
 
 use std::sync::mpsc;
@@ -277,31 +277,27 @@ pub fn make_event_channels() -> (EventListener, EventReciever) {
 
 #[cfg(target_os = "linux")]
 #[derive(Clone, Copy)]
-pub struct X11Surface
-{
-    pub(crate) window:     raw::c_ulong,
-    pub(crate) display:    *mut raw::c_void,
+pub struct X11Surface {
+    pub(crate) window: raw::c_ulong,
+    pub(crate) display: *mut raw::c_void,
 }
 
 #[cfg(target_os = "linux")]
 #[derive(Clone, Copy)]
-pub struct WaylandSurface
-{
-    pub(crate) surface:    *mut raw::c_void,
-    pub(crate) display:    *mut raw::c_void,
+pub struct WaylandSurface {
+    pub(crate) surface: *mut raw::c_void,
+    pub(crate) display: *mut raw::c_void,
 }
 
 #[cfg(target_os = "windows")]
 #[derive(Clone, Copy)]
-pub struct Win32Surface
-{
-    pub(crate) surface:    *mut raw::c_void,
-    pub(crate) display:    *mut raw::c_void,
+pub struct Win32Surface {
+    pub(crate) surface: *mut raw::c_void,
+    pub(crate) module:  *mut raw::c_void,
 }
 
 #[derive(Clone, Copy)]
-pub enum NativeSurface
-{
+pub enum NativeSurface {
     #[cfg(target_os = "linux")]
     X11(X11Surface),
     #[cfg(target_os = "linux")]

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::math::{
+use common::math::{
     float4::*,
     float4x4::*,
 };
@@ -25,6 +25,7 @@ pub(crate) struct ComputePushConstants {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub(crate) struct GlobalSceneData {
     pub view:           Float4x4,
     //----------------- 16-byte boundary
@@ -35,13 +36,38 @@ pub(crate) struct GlobalSceneData {
     pub ambient_color:  Float4,
     pub sunlight_dir:   Float4,
     pub sunlight_color: Float4,
-    padding0:           Float4,
+    pub padding0:       Float4,
     //----------------- 16-byte boundary
 }
 
+// vertex_buffer:       VkDeviceAddress,
+// material_index: VkDeviceAddress,
+//
+//
+
+// -> Dynamic Uniform Buffer
+#[repr(C)]
+pub(crate) struct GpuMeshUniform {
+    pub transform: Float4x4,
+}
+
+// -> Dynamic Uniform Buffer
+#[repr(C)]
+pub(crate) struct GpuMaterialUniform {
+    ambient_color: Float4,
+    //----------------- 16-byte boundary
+}
+
+#[repr(C)]
 pub(crate) struct GpuDrawPushConstants {
-    pub world_matrix:  Float4x4,
-    pub vertex_buffer: VkDeviceAddress,
+    //----------------- 16-byte boundary
+    pub vertex_buffer:    VkDeviceAddress,
+	pub mesh_data_buffer: VkDeviceAddress,
+	//----------------- 16-byte boundary
+	//material_buffer:  VkDeviceAddress,
+	pub mesh_index:       u32,
+	//material_index:   u32,
+	//----------------- 16-byte boundary
 }
 
 pub(crate) enum ShaderStage {

@@ -210,6 +210,8 @@ impl Instance {
             } else {
                 return Err("Unsupported window manager".to_string());
             }
+        } else if cfg!(target_os = "windows") {
+            byte_array_as_cstr!(consts::VK_KHR_WIN32_SURFACE_EXTENSION_NAME)
         } else {
             return Err("Unsupported operating system".to_string());
         };
@@ -340,7 +342,8 @@ impl Instance {
 
 impl Surface {
     pub fn new(instance: &Instance, native_surface: NativeSurface) -> Result<Surface, String> {
-        let result = if cfg!(target_os = "linux") {
+        let result = {
+            #[cfg(target_os = "linux")]
             if let NativeSurface::Wayland(native) = native_surface {
                 let info = VkWaylandSurfaceCreateInfoKHR {
                     sType: VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
@@ -381,11 +384,34 @@ impl Surface {
                 Ok(Surface {
                     handle: unsafe { surf.assume_init() },
                 })
-            } else {
-                panic!("Invalid native surface for linux.");
             }
-        } else {
-            Err("unsupported operating system".to_string())
+
+            #[cfg(target_os = "windows")]
+            {
+                let NativeSurface::Win32(native) = native_surface;
+                let info = VkWin32SurfaceCreateInfoKHR {
+                    sType:     VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+                    pNext:     std::ptr::null(),
+                    flags:     0,
+                    hinstance: native.module,
+                    hwnd:      native.surface,
+                };
+
+                let mut surf = MaybeUninit::<VkSurfaceKHR>::uninit();
+                util::call_throw!(
+                    instance.inst_fns.create_win32_surface.unwrap(),
+                    instance.handle,
+                    &info as *const _,
+                    std::ptr::null(),
+                    surf.as_mut_ptr()
+                );
+
+                return Ok(Surface {
+                    handle: unsafe { surf.assume_init() },
+                })
+            }
+
+            panic!("Invalid native surface for linux.");
         };
 
         result
@@ -669,6 +695,12 @@ impl Gpu {
     }
 }
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        self.destroy();
+    }
+}
+
 impl Device {
     pub fn new(create_info: CreateInfo) -> Device {
         let instance = match Instance::new(
@@ -910,70 +942,7 @@ impl Device {
         return context::DeviceContext::new(device);
     }
 
-    pub fn create_imgui_editor(&self, min_image_count: u32) -> super::EditorRenderData {
-        // 1: create descriptor pool for IMGUI
-        //  the size of the pool is very oversized, but it's copied from imgui demo.
-        let sizes: [PoolSizeRatio; 11] = [
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_SAMPLER,                ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, ratio: 1000.0 },
-            PoolSizeRatio{descriptor_type: VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       ratio: 1000.0 },
-        ];
-
-        let descriptor_alloc = self.create_descriptor_allocator(1000, DescriptorAllocatorFlags::AllowFree, sizes.as_slice());
-
-        // 2: initialize imgui library for vulkan
-        use vendor::imgui::{ImGuiVulkanInitInfo, ig_load_vulkan_functions, ig_vulkan_init, ig_vulkan_create_fonts_texture};
-
-        let surface_format = self.gpu.select_surface_format(consts::DEVICE_FEATURES.prefer_hdr);
-
-        let mut dyn_render_info = VkPipelineRenderingCreateInfo::default();
-        dyn_render_info.colorAttachmentCount    = 1;
-        dyn_render_info.pColorAttachmentFormats = &surface_format.format;
-
-        let init_info = ImGuiVulkanInitInfo{
-            Instance:                    self.instance.handle,
-            PhysicalDevice:              self.gpu.handle,
-            Device:                      self.handle,
-            QueueFamily:                 self.get_queue_index(util::QueueType::Graphics),
-            Queue:                       self.get_queue(util::QueueType::Graphics),
-            DescriptorPool:              descriptor_alloc.pool,          // See requirements in imgui notes
-            RenderPass:                  ptr::null_mut(),                // using dynamic rendering, so can be ignored
-            MinImageCount:               min_image_count,                // >= 2
-            ImageCount:                  min_image_count,                // >= MinImageCount
-            MSAASamples:                 VK_SAMPLE_COUNT_1_BIT,          // 0 defaults to VK_SAMPLE_COUNT_1_BIT
-
-            // (Optional)
-            PipelineCache:               ptr::null_mut(),
-            Subpass:                     0,
-
-            // (Optional) Dynamic Rendering
-            // Need to explicitly enable VK_KHR_dynamic_rendering extension to use this, even for Vulkan 1.3.
-            UseDynamicRendering:         true,
-            PipelineRenderingCreateInfo: dyn_render_info,
-
-            // (Optional) Allocation, Debugging
-            Allocator:                   ptr::null(),
-            CheckVkResultFn:             None,
-            MinAllocationSize:           0,
-        };
-
-        ig_load_vulkan_functions(self.instance.glb_fns.get_inst_procaddr, self.instance.handle);
-        ig_vulkan_init(init_info);
-        ig_vulkan_create_fonts_texture();
-
-        return super::EditorRenderData{ allocator: descriptor_alloc };
-    }
-
     pub fn destroy_imgui_editor(&self, editor: &mut super::EditorRenderData) {
-        vendor::imgui::ig_vulkan_shutdown();
         self.destroy_descriptor_allocator(&mut editor.allocator);
     }
 

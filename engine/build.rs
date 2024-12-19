@@ -10,7 +10,10 @@ fn build_shaders() {
         .canonicalize()
         .expect("cannot canonicalize path");
 
+    #[cfg(target_os = "linux")]
     let compile_path = engine_path.join("assets/shaders/compile.sh");
+    #[cfg(target_os = "windows")]
+    let compile_path = engine_path.join("assets/shaders/compile.bat");
 
     // only rebuild if we've added a shader
     println!("cargo:rerun-if-changed={}", compile_path.to_str().expect("Failed to get string representation of shader compiler path."));

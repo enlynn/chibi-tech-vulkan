@@ -11,6 +11,33 @@ pub const VK_API_VERSION_1_3: u32 = 1u32 << 22u32 | 3u32 << 12u32;
 
 use std::ptr;
 
+#[cfg(windows)]
+mod surface {
+    use super::*;
+
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct VkWin32SurfaceCreateInfoKHR {
+        pub sType:     VkStructureType,
+        pub pNext:     *const ::std::os::raw::c_void,
+        pub flags:     VkXlibSurfaceCreateFlagsKHR,
+        pub hinstance: *mut ::std::os::raw::c_void,
+        pub hwnd:      *mut ::std::os::raw::c_void,
+    }
+
+    pub type PFN_vkCreateWin32SurfaceKHR = ::std::option::Option<
+        unsafe extern "C" fn(
+            instance:    VkInstance,
+            pCreateInfo: *const VkWin32SurfaceCreateInfoKHR,
+            pAllocator:  *const VkAllocationCallbacks,
+            pSurface:    *mut VkSurfaceKHR,
+        ) -> VkResult,
+    >;
+}
+
+#[cfg(windows)]
+pub use surface::*;
+
 impl Default for VkApplicationInfo {
     fn default() -> Self {
         Self{
