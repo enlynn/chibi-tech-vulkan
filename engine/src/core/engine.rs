@@ -16,10 +16,10 @@ use crate::renderer::{
 use super::asset_system::*;
 
 pub trait Game {
-    fn on_init(&mut self)     -> bool;
-    fn on_update(&mut self, frame_time_ms: f64)   -> bool;
-    fn on_render(&mut self)   -> bool; //Will this function be necessary?
-    fn on_shutdown(&mut self) -> bool;
+    fn on_init(&mut self)                                                         -> bool;
+    fn on_update(&mut self, frame_time_ms: f64, commands: &[RenderCommandBuffer]) -> bool;
+    fn on_render(&mut self)                                                       -> bool; //Will this function be necessary?
+    fn on_shutdown(&mut self)                                                     -> bool;
 }
 
 pub struct GameInfo {
@@ -32,10 +32,10 @@ pub struct GameInfo {
 
 pub struct DefaultGame {}
 impl Game for DefaultGame {
-    fn on_init(&mut self) -> bool { return false; }
-    fn on_update(&mut self, frame_time: f64)   -> bool { return false; }
-    fn on_render(&mut self)   -> bool { return false; }
-    fn on_shutdown(&mut self) -> bool { return false; }
+    fn on_init(&mut self)                                                        -> bool { return false; }
+    fn on_update(&mut self, _frame_time: f64, _commands: &[RenderCommandBuffer]) -> bool { return false; }
+    fn on_render(&mut self)                                                      -> bool { return false; }
+    fn on_shutdown(&mut self)                                                    -> bool { return false; }
 }
 
 pub struct Engine {
@@ -109,15 +109,16 @@ impl Engine {
             // Process any waiting messages from the renderer
             //
             let mut last_frame_rendered = false;
+            let mut render_commands: Vec<RenderCommandBuffer> = Vec::new();
             while let Some(msg) = self.render_thread.recieve_message(false) {
                 match msg {
-                    RenderThreadResponse::RenderFrameDone   => last_frame_rendered = true,
-                    RenderThreadResponse::RendererShutdown  => todo!(),
-                    RenderThreadResponse::SubmitCommandList => todo!(),
+                    RenderThreadResponse::RenderFrameDone              => last_frame_rendered = true,
+                    RenderThreadResponse::RendererShutdown             => todo!(),
+                    RenderThreadResponse::SubmitCommandList(response)  => { render_commands.push(response.cmd_buffer); },
                 }
             }
 
-            game_res = game.on_update(last_frame_time_ms);
+            game_res = game.on_update(last_frame_time_ms, &render_commands);
             if !game_res {
                 break;
             }

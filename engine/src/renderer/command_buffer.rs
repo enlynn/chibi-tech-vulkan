@@ -1,9 +1,12 @@
 use std::collections::VecDeque;
 
-use common::math::float4x4::*;
+use common::math::{float3::Float3, float4x4::*};
 use assetlib::mesh::Vertex;
 
+#[derive(Clone, Copy, PartialEq)]
 pub enum RenderId {
+    Unknown,                                                // Unknown Id - this is an error state
+    None,                                                   // Generic Empty Id - this is a valid state
     Mesh(super::mesh::MeshId),
     Texture2d(super::texture::TextureId),
     Material(super::material::MaterialId),
@@ -20,6 +23,8 @@ pub struct CreateMeshInfo {
     //todo: other mesh properties
     pub transform:    Float4x4,
 
+    pub material:     RenderId,
+
     // Some engine-id so that we can tell the engine the mesh has uploaded
     pub engine_id:    u64,
 }
@@ -27,7 +32,7 @@ pub struct CreateMeshInfo {
 // Required for sending a *const Vertex
 unsafe impl Send for CreateMeshInfo {}
 
-pub struct ReadyMeshInfo {
+pub struct ReadyRenderableInfo {
     pub engine_id:      u64,
     pub render_mesh_id: RenderId,
 }
@@ -37,15 +42,26 @@ pub struct CameraStateInfo {
     pub perspective_matrix: Float4x4
 }
 
+pub struct MaterialInstanceInfo {
+    pub ambient_map:   RenderId,
+    pub ambient_color: Float3,
+
+    // Some engine-id so that we can tell the engine the mesh has uploaded
+    pub engine_id:     u64,
+}
+
 pub struct TextureInfo {
-    pub(crate) name:    String,        //todo: perhaps use a 128bit asset id
-    pub(crate) format:  super::texture::TextureFormat,
-    pub(crate) flags:   super::texture::TextureFlags,
-    pub(crate) sampler: super::texture::SamplerType,
-    pub(crate) width:   u32,
-    pub(crate) height:  u32,
-    pub(crate) depth:   u32,
-    pub(crate) pixels:  *const u8,    //todo: can we pass ownership of the memory somehow?
+    pub name:    String,        //todo: perhaps use a 128bit asset id
+    pub format:  super::texture::TextureFormat,
+    pub flags:   super::texture::TextureFlags,
+    pub sampler: super::texture::SamplerType,
+    pub width:   u32,
+    pub height:  u32,
+    pub depth:   u32,
+    pub pixels:  *const u8,    //todo: can we pass ownership of the memory somehow?
+
+    // Some engine-id so that we can tell the engine the mesh has uploaded
+    pub engine_id: u64,
 }
 
 pub enum RenderCommand{
@@ -66,17 +82,19 @@ pub enum RenderCommand{
     DestroyTexture,
 
     // Material-related commands
-    CreateMaterial,
+    CreateMaterial(MaterialInstanceInfo),
     DestroyMaterial,
 
     // Renderer -> Engine Commands
     //
 
-    ReadyMesh(ReadyMeshInfo),
+    ReadyMesh(ReadyRenderableInfo),
+    ReadyMaterial(ReadyRenderableInfo),
+    ReadyTexture(ReadyRenderableInfo),
 }
 
 pub struct RenderCommandBuffer{
-    pub(crate) commands: VecDeque<RenderCommand>,
+    pub commands: VecDeque<RenderCommand>,
 }
 
 impl Default for RenderCommandBuffer{

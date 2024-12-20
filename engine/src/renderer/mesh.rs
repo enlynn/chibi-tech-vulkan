@@ -46,6 +46,7 @@ pub(crate) struct GpuMeshDraw {
     pub index_buffer:  AllocatedBuffer,
     pub index_count:   u32,
     pub push_constant: GpuDrawPushConstants,
+    pub material:      MaterialInstanceId,
 }
 
 impl Default for GpuMeshBuffers {
@@ -220,6 +221,7 @@ impl MeshSystem {
                 index_buffer:  mesh.index_buffer,
                 index_count:   mesh.index_count,
                 push_constant: push_const,
+                material:      mesh.material,
             };
 
             draws.push(draw);

@@ -2,8 +2,10 @@
 
 #![feature(iter_advance_by)]
 
+use std::path::PathBuf;
+
 #[cfg(feature = "importer")]
-extern crate image;
+pub extern crate image;
 #[cfg(feature = "importer")]
 extern crate meshopt;
 

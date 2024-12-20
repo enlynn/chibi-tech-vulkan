@@ -13,6 +13,7 @@ extern crate common;
 pub mod core;
 pub mod renderer;
 pub mod window;
+pub mod assets;
 
 mod util;
 

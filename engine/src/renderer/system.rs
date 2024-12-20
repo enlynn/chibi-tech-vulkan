@@ -485,6 +485,10 @@ impl RenderSystem {
         result.grey_image               = grey_image;
         result.black_image              = black_image;
         result.error_checkerboard_image = checkerboard;
+        result.default_material         = result.opaque_material.alloc_instance(&result.device, OpaqueInstanceCreateInfo{
+            ambient_texture: result.grey_image,
+            ambient_color:   Float3::zero(),
+        });
 
         return result;
     }
@@ -508,23 +512,6 @@ impl RenderSystem {
             global_ds
         };
 
-        // let's bind a texture!
-        let image_set = {
-            let texture_data = self.texture_system.get_texture_data(self.error_checkerboard_image)
-                .expect("Failed to get error texture");
-
-            let frame_data = self.get_frame_data();
-            let mut dyn_descriptors = frame_data.dynamic_descriptors.borrow_mut();
-
-           	let image_set = dyn_descriptors.allocate(&self.device, self.opaque_material.texture_resource_dl);
-
-            let mut writer = DescriptorWriter::new();
-           	writer.write_combined_image_sampler(0, texture_data.image.view, texture_data.sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-           	writer.update_set(&self.device, image_set);
-
-            image_set
-        };
-
         let color_attachment = make_color_attachment_info(self.scene_image.view, None, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
        	let depth_attachment = make_depth_attachment_info(self.depth_image.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
@@ -537,15 +524,34 @@ impl RenderSystem {
         cmd_buffer.set_viewport(draw_extent.width as i32, (draw_extent.height  as i32), 0, 0);
         cmd_buffer.set_scissor(draw_extent.width, draw_extent.height);
 
-        let sets: [VkDescriptorSet; 2] = [scene_set, image_set];
-        cmd_buffer.bind_graphics_descriptor_sets(self.opaque_material.pipeline_layout, 0, &sets);
-
         let persp_view = mul_rh(self.perspective_matrix, self.view_matrix);
 
         let meshes_to_draw = self.mesh_system.collect_live_meshes();
         let draw_list = self.mesh_system.build_draw_list(frame_state.frame_index, &meshes_to_draw);
 
         for draw in draw_list {
+            let image_set = {
+                let material_resources = self.opaque_material.get_material_resource_data(draw.material);
+
+                let texture_data = self.texture_system.get_texture_data(material_resources.color_texture)
+                    .expect("Failed to get error texture");
+
+                let frame_data = self.get_frame_data();
+                let mut dyn_descriptors = frame_data.dynamic_descriptors.borrow_mut();
+
+               	let image_set = dyn_descriptors.allocate(&self.device, self.opaque_material.texture_resource_dl);
+
+                let mut writer = DescriptorWriter::new();
+               	writer.write_combined_image_sampler(0, texture_data.image.view, texture_data.sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+               	writer.update_set(&self.device, image_set);
+
+                image_set
+            };
+
+            // todo: bind only when necessaray
+            let sets: [VkDescriptorSet; 2] = [scene_set, image_set];
+            cmd_buffer.bind_graphics_descriptor_sets(self.opaque_material.pipeline_layout, 0, &sets);
+
             cmd_buffer.bind_push_constants(self.opaque_material.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, draw.push_constant, 0);
             cmd_buffer.bind_index_buffer(&draw.index_buffer);
             cmd_buffer.draw_indexed(draw.index_count, 1, 0, 0, 0);
@@ -563,18 +569,29 @@ impl RenderSystem {
                 }
 
                 RenderCommand::CreateMesh(mesh_info) => {
+                    let material_id = match mesh_info.material {
+                        RenderId::MaterialInstance(material_id) => {
+                            if self.opaque_material.is_instance_valid(material_id) {
+                                material_id
+                            } else {
+                                self.default_material
+                            }
+                        },
+                        default => self.default_material,
+                    };
+
                     let mesh_ci = MeshCreateInfo {
                         vertices:     mesh_info.vertices,
                         vertex_count: mesh_info.vertex_count,
                         indices:      mesh_info.indices,
                         index_count:  mesh_info.index_count,
                         transform:    mesh_info.transform,
-                        material:     self.default_material,
+                        material:     material_id,
                     };
 
                     let mesh_id = self.mesh_system.create_mesh(mesh_ci, &mut self.imm_command_buffer, self.imm_fence);
 
-                    let response = ReadyMeshInfo{
+                    let response = ReadyRenderableInfo{
                         engine_id:      mesh_info.engine_id,
                         render_mesh_id: RenderId::Mesh(mesh_id),
                     };
@@ -582,13 +599,66 @@ impl RenderSystem {
                     self.outgoing_commands.commands.push_back(RenderCommand::ReadyMesh(response));
                 },
 
+                RenderCommand::CreateTexture(tex_info) => {
+                    let tex_ci = TextureCreateInfo {
+                        name:    tex_info.name.clone(),        //todo: perhaps use a 128bit asset id
+                        format:  tex_info.format,
+                        flags:   tex_info.flags,
+                        sampler: tex_info.sampler,
+                        width:   tex_info.width,
+                        height:  tex_info.height,
+                        depth:   tex_info.depth,
+                        pixels:  tex_info.pixels,
+                    };
+
+                    let tex_id = self.texture_system.create_texture(tex_ci, &mut self.imm_command_buffer, self.imm_fence);
+
+                    let response = ReadyRenderableInfo{
+                        engine_id:      tex_info.engine_id,
+                        render_mesh_id: RenderId::Texture2d(tex_id),
+                    };
+
+                    self.outgoing_commands.commands.push_back(RenderCommand::ReadyTexture(response));
+                },
+
+                RenderCommand::CreateMaterial(mat_info) => {
+                    let texture_id = match mat_info.ambient_map {
+                        RenderId::Texture2d(texture_id) => {
+                            if self.texture_system.is_texture_valid(texture_id) {
+                                texture_id
+                            } else {
+                                self.error_checkerboard_image
+                            }
+                        },
+                        default => self.error_checkerboard_image,
+                    };
+
+                    let instance_id = self.opaque_material.alloc_instance(&self.device, OpaqueInstanceCreateInfo{
+                        ambient_texture: texture_id,
+                        ambient_color:   mat_info.ambient_color,
+                    });
+
+                    let response = ReadyRenderableInfo{
+                        engine_id:      mat_info.engine_id,
+                        render_mesh_id: RenderId::MaterialInstance(instance_id),
+                    };
+
+                    self.outgoing_commands.commands.push_back(RenderCommand::ReadyMaterial(response));
+                },
+
                 default => {},
             }
         }
     }
 
-    pub fn submit_render_commands(&mut self, render_command_buffer: RenderCommandBuffer) {
+    pub fn submit_render_commands(&mut self, mut render_command_buffer: RenderCommandBuffer) -> RenderCommandBuffer {
         self.process_render_commands(&render_command_buffer);
+
+        // copy the data over - todo: do this better
+        render_command_buffer.commands.clear();
+        render_command_buffer.commands.extend(self.outgoing_commands.commands.drain(..));
+
+        render_command_buffer
     }
 
     pub fn render(&mut self) {

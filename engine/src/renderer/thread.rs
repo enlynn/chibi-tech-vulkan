@@ -46,7 +46,7 @@ impl ThreadFence {
 }
 
 pub struct RtcSubmitCommandList {
-    cmd_buffer: RenderCommandBuffer,
+    pub cmd_buffer: RenderCommandBuffer,
 }
 
 enum RenderThreadCommand {
@@ -58,11 +58,10 @@ enum RenderThreadCommand {
 
 pub struct RtrCommandList {}
 
-#[derive(PartialEq)]
 pub enum RenderThreadResponse {
     RenderFrameDone,
     RendererShutdown,
-    SubmitCommandList,
+    SubmitCommandList(RtcSubmitCommandList),
 }
 
 struct FrameSync {
@@ -85,8 +84,8 @@ fn process_render_command(render_system: &mut RenderSystem, command: RenderThrea
         },
 
         RenderThreadCommand::SubmitCommandList(rtc_submit_command_list) => {
-            render_system.submit_render_commands(rtc_submit_command_list.cmd_buffer);
-            return None; //todo: we'll probably want to send a response buffer...
+            let result = render_system.submit_render_commands(rtc_submit_command_list.cmd_buffer);
+            return Some(RenderThreadResponse::SubmitCommandList(RtcSubmitCommandList{ cmd_buffer: result }));
         },
 
         RenderThreadCommand::RenderFrame(fence) => {
@@ -124,7 +123,10 @@ pub fn create_render_thread(create_info: RendererCreateInfo) -> RenderThread {
             if let Ok(msg) = local_reciever.recv() {
                 let process_response = process_render_command(&mut render_system, msg);
                 if let Some(response) = process_response {
-                    let is_shutdown = response == RenderThreadResponse::RendererShutdown;
+                    let is_shutdown = match &response {
+                        RenderThreadResponse::RendererShutdown => true,
+                        default                                => false,
+                    };
 
                     match local_sender.send(response) {
                         Ok(_)  => {},
@@ -223,8 +225,9 @@ impl RenderThread {
         'msg_loop: loop {
             // block until the renderer has fully shutdown
             if let Some(response) = self.recieve_message(true) {
-                if response == RenderThreadResponse::RendererShutdown {
-                    break 'msg_loop;
+                match response {
+                    RenderThreadResponse::RendererShutdown => break 'msg_loop,
+                    default => {},
                 }
             }
         }

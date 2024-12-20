@@ -1,3 +1,4 @@
+use common::math::float3::Float3;
 use vendor::vulkan::*;
 use common::util::id::*;
 
@@ -17,6 +18,7 @@ use common::math::float4::*;
 
 use super::texture::*;
 use super::shader::*;
+use super::command_buffer::RenderId;
 
 use std::rc::Rc;
 
@@ -46,19 +48,27 @@ pub(crate) trait Material {
     fn on_destroy(&mut self, device: &Device);
     fn on_bind(&mut self, device: &Device);
 
-    fn alloc_instance(&mut self, device: &Device) -> MaterialInstanceId;
+    fn alloc_instance(&mut self, device: &Device, info: OpaqueInstanceCreateInfo) -> MaterialInstanceId;
     fn free_instance(&mut self, device: &Device, instance_id: MaterialInstanceId);
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct OpaqueResources {
-    color_texture:      TextureId,
-    data_buffer:        VkBuffer,
-	data_buffer_offset: u32,
+    id:            MaterialInstanceId,
+    pub color_texture: TextureId,
 }
 
+
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub(crate) struct OpaqueInstanceData {
-    ambient_color: Float4,
+    ambient_color: Float3,
+    pad0:          f32,
+}
+
+pub(crate) struct OpaqueInstanceCreateInfo {
+    pub ambient_texture: TextureId,
+    pub ambient_color:   Float3,
 }
 
 const MAX_OPAQUE_INSTANCES: usize = 1000;
@@ -70,8 +80,8 @@ pub(crate) struct OpaqueMaterial {
 
     // Descriptor Set: Textures
     id_gen:            IdSystem,
-    resources:         Vec<OpaqueResources>,
-    instances:         Vec<OpaqueInstanceData>,
+    resources:         [OpaqueResources;    MAX_OPAQUE_INSTANCES],
+    instances:         [OpaqueInstanceData; MAX_OPAQUE_INSTANCES],
     gpu_buffer:        Vec<AllocatedBuffer>,
 }
 
@@ -113,10 +123,42 @@ impl Default for OpaqueMaterial {
             scene_dl:            std::ptr::null_mut(),
             texture_resource_dl: std::ptr::null_mut(),
             id_gen:              IdSystem::new(MAX_OPAQUE_INSTANCES),
-            resources:           Vec::with_capacity(MAX_OPAQUE_INSTANCES),
-            instances:           Vec::with_capacity(MAX_OPAQUE_INSTANCES),
+            resources:           [OpaqueResources::default();    MAX_OPAQUE_INSTANCES],
+            instances:           [OpaqueInstanceData::default(); MAX_OPAQUE_INSTANCES],
             gpu_buffer:          Vec::new(),
         }
+    }
+}
+
+impl Default for OpaqueResources {
+    fn default() -> Self {
+        Self{
+            id:            INVALID_MATERIAL_INSTACE_ID,
+            color_texture: INVALID_TEXTURE_ID,
+        }
+    }
+}
+
+
+impl Default for OpaqueInstanceData {
+    fn default() -> Self {
+        Self{
+            ambient_color: Float3::zero(),
+            pad0:          0.0,
+        }
+    }
+}
+
+impl OpaqueMaterial {
+    pub fn is_instance_valid(&self, instance_id: MaterialInstanceId) -> bool {
+        return instance_id.as_material_id() == OPAQUE_MAT_ID && self.id_gen.is_id_valid(instance_id.as_instance_id())
+    }
+
+    pub fn get_material_resource_data(&self, instance_id: MaterialInstanceId) -> &OpaqueResources {
+        assert!(self.is_instance_valid(instance_id));
+
+        let index = instance_id.as_index();
+        return &self.resources[index];
     }
 }
 
@@ -221,12 +263,41 @@ impl Material for OpaqueMaterial {
         todo!()
     }
 
-    fn alloc_instance(&mut self, device: &Device) -> MaterialInstanceId {
-        todo!()
+    fn alloc_instance(&mut self, device: &Device, info: OpaqueInstanceCreateInfo) -> MaterialInstanceId {
+        let id_result: Id = self.id_gen.alloc_id().unwrap_or(INVALID_ID);
+        if id_result == INVALID_ID {
+            return INVALID_MATERIAL_INSTACE_ID;
+        }
+
+        let result = MaterialInstanceId(OPAQUE_MAT_ID, id_result);
+        let index = result.as_index();
+
+        let mut resource = &mut self.resources[index];
+        resource.id            = result;
+        resource.color_texture = info.ambient_texture;
+
+        let mut data = &mut self.instances[index];
+        data.ambient_color = info.ambient_color;
+
+        return result;
     }
 
     fn free_instance(&mut self, device: &Device, instance_id: MaterialInstanceId) {
         todo!()
+    }
+}
+
+impl MaterialInstanceId {
+    pub fn as_material_id(&self) -> MaterialId {
+        return self.0;
+    }
+
+    pub fn as_instance_id(&self) -> Id {
+        return self.1;
+    }
+
+    pub fn as_index(&self) -> usize {
+        return self.1.get_index() as usize;
     }
 }
 

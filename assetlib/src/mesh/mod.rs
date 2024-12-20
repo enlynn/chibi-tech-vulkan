@@ -27,15 +27,15 @@ impl Vertex {
     }
 }
 
-pub struct ChibiGeometry {
+pub struct ChibiImportGeometry {
     pub vertices:       Vec<Vertex>,
     pub indices:        Vec<u32>,
     pub material_index: Option<usize>,
 }
 
-pub struct ChibiModel {
-    pub geoms:     Vec<ChibiGeometry>,
-    pub materials: Vec<ChibiMaterial>,
+pub struct ChibiImportMesh {
+    pub geoms:     Vec<ChibiImportGeometry>,
+    pub materials: Vec<ChibiImportMaterial>,
 }
 
 impl Default for Vertex {
@@ -50,7 +50,7 @@ impl Default for Vertex {
     }
 }
 
-impl Default for ChibiGeometry {
+impl Default for ChibiImportGeometry {
     fn default() -> Self {
         Self{
             vertices:       Vec::new(),

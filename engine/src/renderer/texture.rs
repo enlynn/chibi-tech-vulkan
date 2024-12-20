@@ -22,19 +22,24 @@ use super::graphics::{
 pub struct TextureId(Id);
 pub const INVALID_TEXTURE_ID: TextureId = TextureId(INVALID_ID);
 
+#[derive(Debug, Clone, Copy)]
 pub enum TextureFormat {
     Unknown,
+    R8g8b8Unorm,
+    R8g8b8UnormSrgb,
     R8g8b8a8Unorm,
     R8g8b8a8UnormSrgb,
     R8g8b8a8Bc1,
     R8g8b8a8Bc1Srgb,
 }
 
+#[derive(Clone, Copy)]
 pub enum TextureFlags {
     None      = 0x00,
     MipMapped = 0x01,
 }
 
+#[derive(Clone, Copy)]
 pub enum SamplerType {
     Linear,
     Nearest,
@@ -95,6 +100,8 @@ impl Default for Texture2D {
 pub fn texture_format_to_vkformat(format: TextureFormat) -> VkFormat {
     match format {
         TextureFormat::Unknown           => return VK_FORMAT_UNDEFINED,
+        TextureFormat::R8g8b8Unorm       => return VK_FORMAT_R8G8B8_UNORM,
+        TextureFormat::R8g8b8UnormSrgb   => return VK_FORMAT_R8G8B8_SRGB,
         TextureFormat::R8g8b8a8Unorm     => return VK_FORMAT_R8G8B8A8_UNORM,
         TextureFormat::R8g8b8a8UnormSrgb => return VK_FORMAT_R8G8B8A8_SRGB,
         TextureFormat::R8g8b8a8Bc1       => return VK_FORMAT_BC1_RGBA_UNORM_BLOCK,
@@ -105,6 +112,8 @@ pub fn texture_format_to_vkformat(format: TextureFormat) -> VkFormat {
 pub fn get_bytes_per_pixel(format: VkFormat) -> u32 {
     match format {
         VK_FORMAT_UNDEFINED            => panic!("Unsupported vk format for textures: VK_FORMAT_UNDEFINED"),
+        VK_FORMAT_R8G8B8_UNORM         => return 3,
+        VK_FORMAT_R8G8B8_SRGB          => return 3,
         VK_FORMAT_R8G8B8A8_UNORM       => return 4,
         VK_FORMAT_R8G8B8A8_SRGB        => return 4,
         VK_FORMAT_BC1_RGBA_UNORM_BLOCK => return 4,
@@ -142,7 +151,7 @@ impl TextureSystem {
         self.device.destroy_sampler(self.default_sampler_nearest);
     }
 
-    pub fn create_texture(&mut self, info: TextureCreateInfo, mut command_buffer: &mut CommandBuffer, fence: VkFence) -> TextureId {
+    pub(crate) fn create_texture(&mut self, info: TextureCreateInfo, mut command_buffer: &mut CommandBuffer, fence: VkFence) -> TextureId {
         let result: TextureId = TextureId(self.id_gen.alloc_id().unwrap_or(INVALID_TEXTURE_ID.0));
         if result == INVALID_TEXTURE_ID {
             return result;
@@ -212,11 +221,15 @@ impl TextureSystem {
         }
     }
 
-    pub fn get_texture_data(&self, id: TextureId) -> Option<Texture2D> {
+    pub(crate) fn get_texture_data(&self, id: TextureId) -> Option<Texture2D> {
         if self.id_gen.is_id_valid(id.0) {
             return Some(self.textures[id.0.get_index() as usize]);
         }
 
         return None;
+    }
+
+    pub(crate) fn is_texture_valid(&self, id: TextureId) -> bool {
+        return self.id_gen.is_id_valid(id.0);
     }
 }

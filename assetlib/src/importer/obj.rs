@@ -405,24 +405,24 @@ fn make_vertex_from_face(model: &ObjModel, obj: &ObjGeometry, face: ObjFaceIdx) 
     };
 }
 
-fn convert_obj_file(model: &ObjModel) -> ChibiModel {
+fn convert_obj_file(model: &ObjModel) -> ChibiImportMesh {
     let mut unopt_vertex_count = 0;
     let mut vertex_count = 0;
 
     let mut unopt_index_count = 0;
     let mut opt_index_count = 0;
 
-    let mut result = ChibiModel{ geoms: Vec::new(), materials: Vec::new() };
+    let mut result = ChibiImportMesh{ geoms: Vec::new(), materials: Vec::new() };
 
     for obj_mat in &model.materials {
-        result.materials.push(ChibiMaterial{
+        result.materials.push(ChibiImportMaterial{
             ambient_color: obj_mat.ambient_color,
             ambient_map:   obj_mat.ambient_map.clone(),
         });
     }
 
     for obj in &model.geoms {
-        let mut chibi_geom = ChibiGeometry{
+        let mut chibi_geom = ChibiImportGeometry{
             vertices:       Vec::new(),
             indices:        Vec::new(),
             material_index: obj.material_index,
@@ -538,7 +538,7 @@ fn convert_obj_file(model: &ObjModel) -> ChibiModel {
     return result;
 }
 
-pub fn import_obj_file(asset_path: &PathBuf, name: &str) -> ChibiModel {
+pub fn import_obj_file(asset_path: &PathBuf, name: &str) -> ChibiImportMesh {
     let mut name_str = String::from_str(name).expect("Failed to construct string.");
     name_str.push_str(".obj");
 
